@@ -26,5 +26,8 @@ require __DIR__ . '/../src/middleware.php';
 // Register routes
 require __DIR__ . '/../src/routes.php';
 
+// Seteo configuraciones locales
+require __DIR__ . '/../src/config.php';
+
 // Run app
 $app->run();

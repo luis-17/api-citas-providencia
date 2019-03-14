@@ -4,6 +4,8 @@ use Slim\Http\Request;
 use Slim\Http\Response;
 use \Slim\Middleware\JwtAuthentication;
 use \Firebase\JWT\JWT;
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 
 // Routes
 
@@ -18,7 +20,7 @@ $app->get('/[{name}]', function (Request $request, Response $response, array $ar
 $app->post('/login', function (Request $request, Response $response, array $args) {
 
     $input = $request->getParsedBody();
-    $sql = "SELECT * FROM usuario WHERE username= :username";
+    $sql = "SELECT * FROM usuario WHERE username = :username AND flag_mail_confirm = 2";
     $resultado = $this->db->prepare($sql);
     $resultado->bindParam("username", $input['username']);
     $resultado->execute();
@@ -26,7 +28,7 @@ $app->post('/login', function (Request $request, Response $response, array $args
 
     // verify email address.
     if(!$user) {
-        return $this->response->withJson(['error' => true, 'message' => 'El usuario no existe.']);
+        return $this->response->withJson(['error' => true, 'message' => 'El usuario no existe o aún no está validado.']);
     }
 
     // verify password.
@@ -34,7 +36,7 @@ $app->post('/login', function (Request $request, Response $response, array $args
         return $this->response->withJson(['error' => true, 'message' => 'La contraseña no es válida.']);
     }
 
-    $settings = $this->get('settings'); // get settings array.
+    $settings = $this->get('settings')['jwt']; // get settings array.
     $time = time();
     $token = JWT::encode(
         [
@@ -43,8 +45,8 @@ $app->post('/login', function (Request $request, Response $response, array $args
             'ini' => $time,
             'exp' => $time + (60*60)
         ],
-        $settings['jwt']['secret'],
-        "HS256"
+        $settings['secret'],
+        $settings['encrypt']
     );
 
     return $this->response->withJson(['token' => $token]);
@@ -74,9 +76,23 @@ $app->post('/registro', function(Request $request, Response $response){
     $createdAt = date('Y-m-d H:i:s');
     $updatedAt = date('Y-m-d H:i:s');
 
-    // echo "password " . $password;
+    // VALIDACIONES
 
-    $sql = "INSERT INTO usuario (username, password, ult_ip_address, createdAt, updatedAt) VALUES (:username, :password, :ult_ip_address, :createdAt, :updatedAt)";
+
+
+    $sql = "INSERT INTO usuario (
+        username,
+        password,
+        ult_ip_address,
+        createdAt,
+        updatedAt
+    ) VALUES (
+        :username,
+        :password,
+        :ult_ip_address,
+        :createdAt,
+        :updatedAt
+    )";
 
     $sql2 = "INSERT INTO cliente (
         idusuario,
@@ -105,8 +121,8 @@ $app->post('/registro', function(Request $request, Response $response){
     )";
 
     try {
+        // REGISTRO DE USUARIO
         $resultado = $this->db->prepare($sql);
-
         $resultado->bindParam(':username', $username);
         $resultado->bindParam(':password', $password);
         $resultado->bindParam(':ult_ip_address', $ult_ip_address);
@@ -132,10 +148,72 @@ $app->post('/registro', function(Request $request, Response $response){
 
         $resultado->execute();
         $idcliente =  $this->db->lastInsertId();
+
+
+        // ENVIAR CORREO PARA VERIFICAR
+            $settings = $this->get('settings'); // get settings array.
+            $time = time();
+            $token = JWT::encode(
+                [
+                    'idusuario' => $idusuario,
+                    'username' => $username,
+                    'iat' => $time,
+                    'exp' => $time + (60*60)
+                ],
+                $settings['jwt']['secret'],
+                $settings['jwt']['encrypt']
+            );
+            // $para = $correo;
+            $paciente = ucwords(strtolower( $nombres . ' ' . $apellido_paterno . ' ' . $apellido_materno));
+            $fromAlias = 'Clínica Providencia';
+            // $cabeceras = 'From: Providencia' . "\r\n" . 'X-Mailer: PHP/' . phpversion();
+            $asunto = 'Confirma tu cuenta de Clínica Providencia';
+            $mensaje = '<html lang="es">';
+            $mensaje .= '<body style="font-family: sans-serif;padding: 10px 40px;" >';
+            $mensaje .= '<div style="max-width: 700px;align-content: center;margin-left: auto; margin-right: auto;padding-left: 5%; padding-right: 5%;">';
+            $mensaje .= '	<div style="font-size:16px;">
+                                Estimado(a) paciente: '.$paciente .', <br /> <br /> ';
+
+            $mensaje .= '     <a href="' . BASE_URL . 'public/validaRegistro/'. $token .'">Haz clic aquí para continuar con el proceso de registro.</a>';
+            $mensaje .= '    </div>';
+            $mensaje .= '    <div>
+                                <p>Si no has solicitado la suscripción a este correo electrónico, ignóralo y la suscripción no se activará.</p>
+                            </div>';
+            $mensaje .=  '</div>';
+            $mensaje .= '</body>';
+            $mensaje .= '</html>';
+
+
+
+            $mail = new PHPMailer();
+            $mail->IsSMTP(true);
+            $mail->SMTPAuth = true;
+            //$mail->SMTPDebug = true;
+            $mail->SMTPSecure = "tls";
+            $mail->Host = SMTP_HOST;
+            $mail->Port = SMTP_PORT;
+            $mail->Username =  SMTP_USERNAME;
+            $mail->Password = SMTP_PASSWORD;
+            $mail->SetFrom(SMTP_USERNAME,$fromAlias);
+            $mail->AddReplyTo(SMTP_USERNAME,$fromAlias);
+            $mail->Subject = $asunto;
+            $mail->IsHTML(true);
+            $mail->AltBody = $mensaje;
+            $mail->MsgHTML($mensaje);
+            $mail->CharSet = 'UTF-8';
+            $mail->AddAddress($correo);
+
+            if($mail->Send()){
+
+            }else{
+                print_r("No se envio correo");
+            }
+
+
+
         return $this->response->withJson([
             'flag' => 1,
-            'message' => "Usuario " . $idusuario . " registrado exitosamente.<br>
-                          Cliente " . $idcliente . " registrado correctamente."
+            'message' => "El registro fue satisfactorio. Recibirás un mensaje en el correo para verificar la cuenta. En caso de no verlo en tu bandeja de entrada, no olvides revisar la bandeja de spam."
         ]);
 
     } catch (PDOException $e) {
@@ -145,8 +223,46 @@ $app->post('/registro', function(Request $request, Response $response){
             'message' => "Ocurrió un error. " . $e->getMessage()
         ]);
     }
+});
 
+$app->get('/validaRegistro/{tkn}', function(Request $request, Response $response, array $args){
+    $token = $request->getAttribute('tkn');
+    $settings = $this->get('settings')['jwt'];
+    if(empty($token))
+    {
+        throw new Exception("Invalido token.");
+    }
+    try {
+        $decode = JWT::decode(
+            $token,
+            $settings['secret'],
+            array($settings['encrypt'])
+        );
+        $idusuario = $decode->idusuario;
 
+        $sql = "UPDATE usuario SET flag_mail_confirm = 2 WHERE idusuario = $idusuario";
+        try {
+            $resultado = $this->db->prepare($sql);
+            $resultado->execute();
+
+            return $this->response->withJson([
+                'flag' => 1,
+                'message' => "Tu cuenta ha sido verificada exitosamente... Ya puedes iniciar sesión para comenzar a disfrutar los beneficios de ser un paciente de Clínica Providencia!."
+            ]);
+        } catch (PDOException $e) {
+            return $this->response->withJson([
+                'flag' => 0,
+                'message' => "Ocurrió un error. Inténtelo nuevamente."
+            ]);
+        }
+        return $this->response->withJson($decode);
+        //code...
+    } catch (\Exception $th) {
+        return $this->response->withJson([
+            'flag' => 0,
+            'message' => "El enlace no es válido o ya no está disponible."
+        ]);
+    }
 });
 
 $app->group('/api', function(\Slim\App $app) {
