@@ -20,7 +20,15 @@ $app->get('/[{name}]', function (Request $request, Response $response, array $ar
 $app->post('/login', function (Request $request, Response $response, array $args) {
 
     $input = $request->getParsedBody();
-    $sql = "SELECT * FROM usuario WHERE username = :username AND flag_mail_confirm = 2";
+    $sql = "
+        SELECT
+            us.idusuario,
+            us.username,
+            us.password
+        FROM usuario AS us
+        WHERE us.username = :username
+        AND us.estado_us = 1
+        AND us.flag_mail_confirm = 2";
     $resultado = $this->db->prepare($sql);
     $resultado->bindParam("username", $input['username']);
     $resultado->execute();
@@ -56,8 +64,8 @@ $app->post('/login', function (Request $request, Response $response, array $args
  * Servicio que realiza el registro de un nuevo usuario
  * Envia un  correo de confirmación
  *
- * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
  * Creado: 12/03/2019
+ * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
  */
 $app->post('/registro', function(Request $request, Response $response){
     // $input = $request->getParsedBody();
@@ -166,7 +174,7 @@ $app->post('/registro', function(Request $request, Response $response){
             // $para = $correo;
             $paciente = ucwords(strtolower( $nombres . ' ' . $apellido_paterno . ' ' . $apellido_materno));
             $fromAlias = 'Clínica Providencia';
-            // $cabeceras = 'From: Providencia' . "\r\n" . 'X-Mailer: PHP/' . phpversion();
+
             $asunto = 'Confirma tu cuenta de Clínica Providencia';
             $mensaje = '<html lang="es">';
             $mensaje .= '<body style="font-family: sans-serif;padding: 10px 40px;" >';
@@ -182,8 +190,6 @@ $app->post('/registro', function(Request $request, Response $response){
             $mensaje .=  '</div>';
             $mensaje .= '</body>';
             $mensaje .= '</html>';
-
-
 
             $mail = new PHPMailer();
             $mail->IsSMTP(true);
@@ -224,7 +230,13 @@ $app->post('/registro', function(Request $request, Response $response){
         ]);
     }
 });
-
+/**
+ * Servicio para validar el registro de un usuario
+ * Actualiza la tabla usuario para habilitarlo
+ *
+ * Creado: 13/03/19
+ * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+ */
 $app->get('/validaRegistro/{tkn}', function(Request $request, Response $response, array $args){
     $token = $request->getAttribute('tkn');
     $settings = $this->get('settings')['jwt'];
@@ -265,12 +277,233 @@ $app->get('/validaRegistro/{tkn}', function(Request $request, Response $response
     }
 });
 
+/**
+ * Servicio para recuperar una contraseña atraves del numero de DNI
+ *
+ * Creado: 14/03/2019
+ * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+ */
+$app->post('/recuperaPassword', function(Request $request, Response $response){
+    $numero_documento = $request->getParam('numero_documento');
+
+    $sql = "
+        SELECT
+            us.idusuario,
+            us.username,
+            us.password,
+            cl.idcliente,
+            cl.nombres,
+            cl.apellido_paterno,
+            cl.apellido_materno,
+            cl.tipo_documento,
+            cl.numero_documento,
+            cl.correo
+        FROM usuario AS us
+        JOIN cliente cl ON us.idusuario = cl.idusuario
+        WHERE cl.numero_documento = :numero_documento
+        LIMIT 1
+    ";
+
+    $resultado = $this->db->prepare($sql);
+    $resultado->bindParam(":numero_documento", $numero_documento);
+    $resultado->execute();
+    $user = $resultado->fetchObject();
+
+    if( empty($user) ){
+        return $this->response->withJson([
+            'flag' => 0,
+            'message' => "El número de documento no se encuentra registrado en el sistema."
+        ]);
+    }
+
+    // ENVIAR CORREO PARA VERIFICAR
+        $settings = $this->get('settings'); // get settings array.
+        $time = time();
+        $token = JWT::encode(
+            [
+                'idusuario' => $user->idusuario,
+                'numero_documento' => $user->numero_documento,
+                'iat' => $time,
+                'exp' => $time + (60*60)
+            ],
+            $settings['jwt']['secret'],
+            $settings['jwt']['encrypt']
+        );
+        // $para = $correo;
+        $paciente = ucwords(strtolower(  $user->nombres . ' ' .  $user->apellido_paterno . ' ' .  $user->apellido_materno));
+        $fromAlias = 'Clínica Providencia';
+
+        $asunto = 'Olvidó su contraseña.';
+        $mensaje = '<html lang="es">';
+        $mensaje .= '<body style="font-family: sans-serif;padding: 10px 40px;" >';
+        $mensaje .= '<div style="max-width: 700px;align-content: center;margin-left: auto; margin-right: auto;padding-left: 5%; padding-right: 5%;">';
+        $mensaje .= '	<div style="font-size:16px;">
+                            Estimado(a) paciente: '.$paciente .', <br /> <br /> ';
+
+        $mensaje .= '     <a href="' . BASE_URL . 'public/validaPassword/'. $token .'">Haz clic aquí para continuar con el proceso de recuperación de contraseña.</a>';
+        $mensaje .= '    </div>';
+        $mensaje .= '    <div>
+                            <p>Si no has solicitado el cambio de contraseña a este correo electrónico, ignóralo y el cambio no se realizará..</p>
+                        </div>';
+        $mensaje .=  '</div>';
+        $mensaje .= '</body>';
+        $mensaje .= '</html>';
+
+        $mail = new PHPMailer();
+        $mail->IsSMTP(true);
+        $mail->SMTPAuth = true;
+        //$mail->SMTPDebug = true;
+        $mail->SMTPSecure = "tls";
+        $mail->Host = SMTP_HOST;
+        $mail->Port = SMTP_PORT;
+        $mail->Username =  SMTP_USERNAME;
+        $mail->Password = SMTP_PASSWORD;
+        $mail->SetFrom(SMTP_USERNAME,$fromAlias);
+        $mail->AddReplyTo(SMTP_USERNAME,$fromAlias);
+        $mail->Subject = $asunto;
+        $mail->IsHTML(true);
+        $mail->AltBody = $mensaje;
+        $mail->MsgHTML($mensaje);
+        $mail->CharSet = 'UTF-8';
+        $mail->AddAddress( $user->correo);
+
+        if($mail->Send()){
+            return $this->response->withJson([
+                'flag' => 1,
+                'message' => "Recibirás un mensaje en el correo para cambiar su contraseña. En caso de no verlo en tu bandeja de entrada, no olvides revisar la bandeja de spam."
+            ]);
+
+        }else{
+            return $this->response->withJson([
+                'flag' => 0,
+                'message' => "Ocurrió un error en el envio de correo. Inténtelo nuevamente"
+            ]);
+        }
+
+});
+
+/**
+ * Servicio para validar el correo de cambio de contraseña
+ * Retorna un OK si el token es válido
+ *
+ * Creado: 14/03/19
+ * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+ */
+$app->get('/validaPassword/{tkn}', function(Request $request, Response $response, array $args){
+    $token = $request->getAttribute('tkn');
+    $settings = $this->get('settings')['jwt'];
+    if(empty($token))
+    {
+        throw new Exception("Invalido token.");
+    }
+    try {
+        $decode = JWT::decode(
+            $token,
+            $settings['secret'],
+            array($settings['encrypt'])
+        );
+        $idusuario = $decode->idusuario;
+
+
+        return $this->response->withJson([
+            'flag' => 0,
+            'message' => "El token es válido."
+        ]);
+        //code...
+    } catch (\Exception $th) {
+        return $this->response->withJson([
+            'flag' => 0,
+            'message' => "El token no es válido o ya no está disponible."
+        ]);
+    }
+});
+
+$app->post('/actualizaPassword', function(Request $request, Response $response){
+    $password  = password_hash($request->getParam('password_new'),PASSWORD_DEFAULT);
+    $token   = $request->getParam('token');
+    $settings = $this->get('settings')['jwt'];
+    try {
+        $decode = JWT::decode(
+            $token,
+            $settings['secret'],
+            array($settings['encrypt'])
+        );
+        $idusuario = $decode->idusuario;
+
+        $sql = "UPDATE usuario SET password = :password, flag_mail_confirm = 2 WHERE idusuario = $idusuario";
+        try {
+            $resultado = $this->db->prepare($sql);
+            $resultado->bindParam(":password", $password);
+            $resultado->execute();
+
+            return $this->response->withJson([
+                'flag' => 1,
+                'message' => "Tu contraseña se actualizó exitosamente."
+            ]);
+        } catch (PDOException $e) {
+            return $this->response->withJson([
+                'flag' => 0,
+                'message' => "Ocurrió un error. Inténtelo nuevamente."
+            ]);
+        }
+        return $this->response->withJson($decode);
+        //code...
+    } catch (\Exception $th) {
+        return $this->response->withJson([
+            'flag' => 0,
+            'message' => "El enlace no es válido o ya no está disponible."
+        ]);
+    }
+
+});
+
 $app->group('/api', function(\Slim\App $app) {
 
-    $app->get('/user',function(Request $request, Response $response, array $args) {
-        // print_r($request->getAttribute('decoded_token_data'));
-        $user = $request->getAttribute('decoded_token_data');
-        return $this->response->withJson($user);
+    $app->get('/cargar_perfil_general',function(Request $request, Response $response, array $args) {
+        try {
+            //code...
+            $user = $request->getAttribute('decoded_token_data');
+
+            $idusuario = $user->idusuario;
+
+            $sql = "
+                SELECT
+                    us.idusuario,
+                    us.username,
+                    us.password,
+                    cl.idcliente,
+                    cl.nombres,
+                    cl.apellido_paterno,
+                    cl.apellido_materno,
+                    cl.tipo_documento,
+                    cl.numero_documento,
+                    cl.correo,
+                    cl.sexo,
+                    cl.telefono
+                FROM usuario AS us
+                JOIN cliente cl ON us.idusuario = cl.idusuario
+                WHERE us.idusuario = :idusuario
+                LIMIT 1
+            ";
+
+            $resultado = $this->db->prepare($sql);
+            $resultado->bindParam(":idusuario", $idusuario);
+            $resultado->execute();
+            $cliente = $resultado->fetchObject();
+
+            return $this->response->withJson([
+                'datos' => $cliente,
+                'flag' => 1,
+                'message' => "Se encontró el cliente."
+            ]);
+
+        } catch (\Exception $th) {
+            return $this->response->withJson([
+                'flag' => 0,
+                'message' => "El token no es válido o ya no está disponible."
+            ]);
+        }
+
     });
 
 });

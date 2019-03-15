@@ -1,13 +1,13 @@
 <?php
-// Application middleware
 use \Slim\Middleware\JwtAuthentication;
-// e.g: $app->add(new \Slim\Csrf\Guard);
+
 $app->add(new JwtAuthentication([
     "path" => "/api", /* or ["/api", "/admin"] */
     "attribute" => "decoded_token_data",
     "secret" => "9Q?6p1jqjl050I#f@2L6l6zi",
     "algorithm" => ["HS256"],
-    "error" => function ($response, $arguments) {
+    "error" => function ($request,$response,$arguments) {
+        // echo $arguments;
         $data["status"] = "error";
         $data["message"] = $arguments["message"];
         return $response
