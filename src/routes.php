@@ -93,7 +93,7 @@ $app->post('/registro', function(Request $request, Response $response){
         SELECT
             us.idusuario,
             us.username,
-            us.password,
+            us.password
         FROM usuario AS us
         WHERE us.username = :username
         LIMIT 1
