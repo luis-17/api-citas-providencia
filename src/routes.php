@@ -24,11 +24,14 @@ $app->post('/login', function (Request $request, Response $response, array $args
         SELECT
             us.idusuario,
             us.username,
-            us.password
+            us.password,
+            cl.idcliente
         FROM usuario AS us
+        JOIN cliente cl ON us.idusuario = cl.idusuario
         WHERE us.username = :username
         AND us.estado_us = 1
-        AND us.flag_mail_confirm = 2";
+        AND us.flag_mail_confirm = 2
+        LIMIT 1";
     $resultado = $this->db->prepare($sql);
     $resultado->bindParam("username", $input['username']);
     $resultado->execute();
@@ -50,6 +53,7 @@ $app->post('/login', function (Request $request, Response $response, array $args
         [
             'idusuario' => $user->idusuario,
             'username' => $user->username,
+            'idcliente' => $user->idcliente,
             'ini' => $time,
             'exp' => $time + (60*60)
         ],
@@ -85,8 +89,27 @@ $app->post('/registro', function(Request $request, Response $response){
     $updatedAt = date('Y-m-d H:i:s');
 
     // VALIDACIONES
+    $sql = "
+        SELECT
+            us.idusuario,
+            us.username,
+            us.password,
+        FROM usuario AS us
+        WHERE us.username = :username
+        LIMIT 1
+    ";
 
+    $resultado = $this->db->prepare($sql);
+    $resultado->bindParam(":username", $username);
+    $resultado->execute();
+    $usuario = $resultado->fetchObject();
 
+    if($usuario){
+        return $this->response->withJson([
+            'flag' => 0,
+            'message' => "El usuario ya existe"
+        ]);
+    }
 
     $sql = "INSERT INTO usuario (
         username,
@@ -459,9 +482,8 @@ $app->post('/actualizaPassword', function(Request $request, Response $response){
 
 $app->group('/api', function(\Slim\App $app) {
 
-    $app->get('/cargar_perfil_general',function(Request $request, Response $response, array $args) {
+    $app->get('/cargar_perfil_general', function(Request $request, Response $response, array $args) {
         try {
-            //code...
             $user = $request->getAttribute('decoded_token_data');
 
             $idusuario = $user->idusuario;
@@ -479,7 +501,11 @@ $app->group('/api', function(\Slim\App $app) {
                     cl.numero_documento,
                     cl.correo,
                     cl.sexo,
-                    cl.telefono
+                    cl.telefono,
+                    cl.peso,
+                    cl.estatura,
+                    cl.tipo_sangre,
+                    cl.fecha_nacimiento
                 FROM usuario AS us
                 JOIN cliente cl ON us.idusuario = cl.idusuario
                 WHERE us.idusuario = :idusuario
@@ -504,6 +530,203 @@ $app->group('/api', function(\Slim\App $app) {
             ]);
         }
 
+    });
+
+    /**
+     * Carga los familiares del paciente logueado
+     *
+     * Creado : 15/03/2019
+     * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+     */
+    $app->get('/cargar_familiares', function(Request $request, Response $response, array $args){
+        try {
+            $user = $request->getAttribute('decoded_token_data');
+
+            $idusuario = $user->idusuario;
+            $data = array();
+            $sql = "
+                SELECT
+                    fam.idcliente,
+                    fam.nombres,
+                    fam.apellido_paterno,
+                    fam.apellido_materno,
+                    fam.tipo_documento,
+                    fam.numero_documento,
+                    fam.correo,
+                    fam.sexo,
+                    fam.telefono,
+                    fam.peso,
+                    fam.estatura,
+                    fam.tipo_sangre,
+                    fam.fecha_nacimiento,
+                    par.idparentesco,
+                    par.descripcion_par
+                FROM usuario AS us
+                JOIN cliente cl ON us.idusuario = cl.idusuario
+                JOIN cliente fam ON cl.idcliente = fam.idtitularcliente
+                JOIN parentesco par ON fam.idparentesco = par.idparentesco
+                WHERE us.idusuario = :idusuario
+                AND fam.estado_pac = 1
+            ";
+
+            $resultado = $this->db->prepare($sql);
+            $resultado->bindParam(":idusuario", $idusuario);
+            $resultado->execute();
+
+            if ($data = $resultado->fetchAll()) {
+                $message = "Se encontraron familiares";
+                $flag = 1;
+            }else{
+                $message = "No tiene familiares registrados";
+                $flag = 0;
+            }
+
+            return $this->response->withJson([
+                'datos' => $data,
+                'flag' => $flag,
+                'message' => $message
+            ]);
+
+
+
+        } catch (\Exception $th) {
+            return $this->response->withJson([
+                'flag' => 0,
+                'message' => "Error al cargar los datos.",
+                'error' => $th
+            ]);
+        }
+    });
+    /**
+     * Servicio para agregar un familiar al cliente logueado
+     */
+    $app->post('/agregar_familiar', function(Request $request, Response $response, array $args){
+        try {
+            $user = $request->getAttribute('decoded_token_data');
+            $idcliente = (int)$user->idcliente;
+
+            $nombres            = $request->getParam('nombres');
+            $apellido_paterno   = $request->getParam('apellido_paterno');
+            $apellido_materno   = $request->getParam('apellido_materno');
+            $correo             = $request->getParam('correo');
+            $tipo_documento     = $request->getParam('tipo_documento');
+            $numero_documento   = $request->getParam('numero_documento');
+            $fecha_nacimiento   = $request->getParam('fecha_nacimiento');
+            $sexo               = $request->getParam('sexo');
+            $idparentesco       = $request->getParam('idparentesco');
+            $tipo_sangre        = $request->getParam('tipo_sangre');
+
+            $createdAt = date('Y-m-d H:i:s');
+            $updatedAt = date('Y-m-d H:i:s');
+
+            $sql = "INSERT INTO cliente (
+                idparentesco,
+                idtitularcliente,
+                nombres,
+                apellido_paterno,
+                apellido_materno,
+                tipo_documento,
+                numero_documento,
+                correo,
+                fecha_nacimiento,
+                sexo,
+                tipo_sangre,
+                createdAt,
+                updatedAt
+            ) VALUES (
+                :idparentesco,
+                :idtitularcliente,
+                :nombres,
+                :apellido_paterno,
+                :apellido_materno,
+                :tipo_documento,
+                :numero_documento,
+                :correo,
+                :fecha_nacimiento,
+                :sexo,
+                :tipo_sangre,
+                :createdAt,
+                :updatedAt
+            )";
+
+            $resultado = $this->db->prepare($sql);
+            $resultado->bindParam(':idparentesco', $idparentesco);
+            $resultado->bindParam(':idtitularcliente', $idcliente);
+            $resultado->bindParam(':nombres', $nombres);
+            $resultado->bindParam(':apellido_paterno', $apellido_paterno);
+            $resultado->bindParam(':apellido_materno', $apellido_materno);
+            $resultado->bindParam(':tipo_documento', $tipo_documento);
+            $resultado->bindParam(':numero_documento', $numero_documento);
+            $resultado->bindParam(':correo', $correo);
+            $resultado->bindParam(':fecha_nacimiento', $fecha_nacimiento);
+            $resultado->bindParam(':sexo', $sexo);
+            $resultado->bindParam(':tipo_sangre', $tipo_sangre);
+            $resultado->bindParam(':createdAt', $createdAt);
+            $resultado->bindParam(':updatedAt', $updatedAt);
+            $resultado->execute();
+
+            return $this->response->withJson([
+                'flag' => 1,
+                'message' => "El registro fue satisfactorio."
+            ]);
+
+
+        } catch (\Exception $th) {
+            return $this->response->withJson([
+                'flag' => 0,
+                'message' => "Error al cargar los datos.",
+                'error' => $th
+            ]);
+        }
+    });
+    /**
+     * Maestro de la tabla PARENTESCO
+     * se emplea para el combo de parentesco al egregar o editar un familiar
+     *
+     * Creado : 15/03/2019
+     * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+     */
+    $app->get('/cargar_parentesco', function(Request $request, Response $response, array $args){
+        try {
+            $user = $request->getAttribute('decoded_token_data');
+
+            $idusuario = $user->idusuario;
+            $data = array();
+            $sql = "
+                SELECT
+                    idparentesco,
+                    descripcion_par
+                FROM parentesco AS par
+                WHERE par.estado_par = 1
+                ORDER BY descripcion_par ASC
+            ";
+
+            $resultado = $this->db->prepare($sql);
+            $resultado->execute();
+
+            if ($data = $resultado->fetchAll()) {
+                $message = "Se encontraron datos";
+                $flag = 1;
+            }else{
+                $message = "No hay datos registrados";
+                $flag = 0;
+            }
+
+            return $this->response->withJson([
+                'datos' => $data,
+                'flag' => $flag,
+                'message' => $message
+            ]);
+
+
+
+        } catch (\Exception $th) {
+            return $this->response->withJson([
+                'flag' => 0,
+                'message' => "Error al cargar los datos.",
+                'error' => $th
+            ]);
+        }
     });
 
 });
