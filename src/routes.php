@@ -485,8 +485,6 @@ $app->post('/actualizaPassword', function(Request $request, Response $response){
                 'message' => "Ocurrió un error. Inténtelo nuevamente."
             ]);
         }
-        return $this->response->withJson($decode);
-        //code...
     } catch (\Exception $th) {
         return $this->response->withJson([
             'flag' => 0,
@@ -1034,6 +1032,58 @@ $app->group('/api', function(\Slim\App $app) {
             return $this->response->withJson([
                 'flag' => 0,
                 'message' => "Error al subir la foto.",
+                'error' => $th
+            ]);
+        }
+    });
+
+    /**
+     * Servicio para editar datos personales y perfil clinico
+     * de un cliente logueado
+     * Se envia por POST el json con los datos
+     *
+     * password_new
+     *
+     * En el header se debe enviar el token con los datos del titular logueado
+     *
+     * Creado : 16/03/2019
+     * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+     */
+    $app->post('/cambiar_password', function(Request $request, Response $response, array $args){
+        try {
+            $user = $request->getAttribute('decoded_token_data');
+
+            $idusuario   = (int)$user->idusuario;
+            $password  = password_hash($request->getParam('password_new'),PASSWORD_DEFAULT);
+
+            $updatedAt          = date('Y-m-d H:i:s');
+
+            $sql = "UPDATE usuario SET
+                password   = :password,
+                updatedAt  = :updatedAt
+                WHERE idusuario = $idusuario
+            ";
+            try {
+                $resultado = $this->db->prepare($sql);
+                $resultado->bindParam(":password", $password);
+                $resultado->bindParam(':updatedAt', $updatedAt);
+                $resultado->execute();
+
+                return $this->response->withJson([
+                    'flag' => 1,
+                    'message' => "Tu contraseña se actualizó exitosamente."
+                ]);
+            } catch (PDOException $e) {
+                return $this->response->withJson([
+                    'flag' => 0,
+                    'message' => "Ocurrió un error. Inténtelo nuevamente."
+                ]);
+            }
+
+        } catch (\Exception $th) {
+            return $this->response->withJson([
+                'flag' => 0,
+                'message' => "Error al actualizar los datos.",
                 'error' => $th
             ]);
         }
