@@ -2,6 +2,7 @@
 
 use Slim\Http\Request;
 use Slim\Http\Response;
+// use Slim\Http\UploadedFile;
 use \Slim\Middleware\JwtAuthentication;
 use \Firebase\JWT\JWT;
 use PHPMailer\PHPMailer\PHPMailer;
@@ -60,6 +61,21 @@ $app->post('/login', function (Request $request, Response $response, array $args
         $settings['secret'],
         $settings['encrypt']
     );
+    //Actualizar el ultimo inicio de sesion y de IP
+    $ult_inicio_sesion = date('Y-m-d H:i:s');
+    $ult_ip_address = $request->getAttribute('ip_address');
+
+    $sql = "UPDATE usuario SET
+                ult_inicio_sesion   = :ult_inicio_sesion,
+                ult_ip_address      = :ult_ip_address
+            WHERE idusuario = $user->idusuario
+        ";
+
+        $resultado = $this->db->prepare($sql);
+        $resultado->bindParam(':ult_inicio_sesion', $ult_inicio_sesion);
+        $resultado->bindParam(':ult_ip_address', $ult_ip_address);
+
+        $resultado->execute();
 
     return $this->response->withJson(['token' => $token]);
 
@@ -597,8 +613,26 @@ $app->group('/api', function(\Slim\App $app) {
             ]);
         }
     });
+
     /**
      * Servicio para agregar un familiar al cliente logueado
+     * Se envia por POST el json con los datos
+     *
+     * nombres
+     * apellido_paterno
+     * apellido_materno
+     * correo
+     * tipo_documento
+     * numero_documento
+     * fecha_nacimiento
+     * sexo
+     * idparentesco
+     * tipo_sangre
+     *
+     * En el header se debe enviar el token con los datos del titular logueado
+     *
+     * Creado : 15/03/2019
+     * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
      */
     $app->post('/agregar_familiar', function(Request $request, Response $response, array $args){
         try {
@@ -679,9 +713,145 @@ $app->group('/api', function(\Slim\App $app) {
             ]);
         }
     });
+
+    /**
+     * Servicio para editar un familiar de un cliente logueado
+     * Se envia por POST el json con los datos
+     *
+     * idcliente
+     * nombres
+     * apellido_paterno
+     * apellido_materno
+     * correo
+     * tipo_documento
+     * numero_documento
+     * fecha_nacimiento
+     * sexo
+     * idparentesco
+     * tipo_sangre
+     *
+     * En el header se debe enviar el token con los datos del titular logueado
+     *
+     * Creado : 16/03/2019
+     * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+     */
+    $app->post('/editar_familiar', function(Request $request, Response $response, array $args){
+        try {
+            $user = $request->getAttribute('decoded_token_data');
+
+            $idtitularcliente   = (int)$user->idcliente;
+
+            $idcliente          = $request->getParam('idcliente');
+            $idparentesco       = $request->getParam('idparentesco');
+            $nombres            = $request->getParam('nombres');
+            $apellido_paterno   = $request->getParam('apellido_paterno');
+            $apellido_materno   = $request->getParam('apellido_materno');
+            $correo             = $request->getParam('correo');
+            $tipo_documento     = $request->getParam('tipo_documento');
+            $numero_documento   = $request->getParam('numero_documento');
+            $fecha_nacimiento   = $request->getParam('fecha_nacimiento');
+            $sexo               = $request->getParam('sexo');
+            $tipo_sangre        = $request->getParam('tipo_sangre');
+
+
+            $updatedAt = date('Y-m-d H:i:s');
+
+            $sql = "UPDATE cliente SET
+                idparentesco        = :idparentesco,
+                nombres             = :nombres,
+                apellido_paterno    = :apellido_paterno,
+                apellido_materno    = :apellido_materno,
+                tipo_documento      = :tipo_documento,
+                numero_documento    = :numero_documento,
+                correo              = :correo,
+                fecha_nacimiento    = :fecha_nacimiento,
+                sexo                = :sexo,
+                tipo_sangre         = :tipo_sangre,
+                updatedAt           = :updatedAt
+                WHERE idcliente = $idcliente
+                AND idtitularcliente = $idtitularcliente
+            ";
+
+            $resultado = $this->db->prepare($sql);
+            $resultado->bindParam(':idparentesco', $idparentesco);
+            $resultado->bindParam(':nombres', $nombres);
+            $resultado->bindParam(':apellido_paterno', $apellido_paterno);
+            $resultado->bindParam(':apellido_materno', $apellido_materno);
+            $resultado->bindParam(':tipo_documento', $tipo_documento);
+            $resultado->bindParam(':numero_documento', $numero_documento);
+            $resultado->bindParam(':correo', $correo);
+            $resultado->bindParam(':fecha_nacimiento', $fecha_nacimiento);
+            $resultado->bindParam(':sexo', $sexo);
+            $resultado->bindParam(':tipo_sangre', $tipo_sangre);
+            $resultado->bindParam(':updatedAt', $updatedAt);
+            $resultado->execute();
+
+            return $this->response->withJson([
+                'flag' => 1,
+                'message' => "Se actualizaron los datos correctamente."
+            ]);
+
+
+        } catch (\Exception $th) {
+            return $this->response->withJson([
+                'flag' => 0,
+                'message' => "Error al actualizar los datos.",
+                'error' => $th
+            ]);
+        }
+    });
+
+    /**
+     * Servicio para anular un familiar de un cliente logueado
+     * Se envia por POST el json con los datos
+     *
+     * idcliente    que se desea anular
+     *
+     * En el header se debe enviar el token con los datos del titular logueado
+     *
+     * Creado : 16/03/2019
+     * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+     */
+    $app->post('/anular_familiar', function(Request $request, Response $response, array $args){
+        try {
+            $user = $request->getAttribute('decoded_token_data');
+
+            $idtitularcliente   = (int)$user->idcliente;
+
+            $idcliente  = $request->getParam('idcliente');
+            $updatedAt  = date('Y-m-d H:i:s');
+
+            $sql = "UPDATE cliente SET
+                estado_pac = 0,
+                updatedAt  = :updatedAt
+                WHERE idcliente = $idcliente
+                AND idtitularcliente = $idtitularcliente
+            ";
+
+            $resultado = $this->db->prepare($sql);
+            $resultado->bindParam(':updatedAt', $updatedAt);
+            $resultado->execute();
+
+            return $this->response->withJson([
+                'flag' => 1,
+                'message' => "Se anuló el famiiar correctamente."
+            ]);
+
+
+        } catch (\Exception $th) {
+            return $this->response->withJson([
+                'flag' => 0,
+                'message' => "Error al anular.",
+                'error' => $th
+            ]);
+        }
+    });
+
     /**
      * Maestro de la tabla PARENTESCO
      * se emplea para el combo de parentesco al egregar o editar un familiar
+     *
+     * En el header se debe enviar el token con los datos del titular logueado
      *
      * Creado : 15/03/2019
      * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
@@ -729,4 +899,143 @@ $app->group('/api', function(\Slim\App $app) {
         }
     });
 
+    /**
+     * Servicio para editar datos personales y perfil clinico
+     * de un cliente logueado
+     * Se envia por POST el json con los datos
+     *
+     * nombres
+     * apellido_paterno
+     * apellido_materno
+     * correo
+     * tipo_documento
+     * numero_documento
+     * fecha_nacimiento
+     * telefono
+     * sexo
+     * peso
+     * estatura
+     * imc
+     * tipo_sangre
+     *
+     * En el header se debe enviar el token con los datos del titular logueado
+     *
+     * Creado : 16/03/2019
+     * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+     */
+    $app->post('/editar_perfil', function(Request $request, Response $response, array $args){
+        try {
+            $user = $request->getAttribute('decoded_token_data');
+
+            $idcliente   = (int)$user->idcliente;
+
+            $nombres            = $request->getParam('nombres');
+            $apellido_paterno   = $request->getParam('apellido_paterno');
+            $apellido_materno   = $request->getParam('apellido_materno');
+            $correo             = $request->getParam('correo');
+            $tipo_documento     = $request->getParam('tipo_documento');
+            $numero_documento   = $request->getParam('numero_documento');
+            $fecha_nacimiento   = $request->getParam('fecha_nacimiento');
+            $telefono           = $request->getParam('telefono');
+            $sexo               = $request->getParam('sexo');
+            $peso               = $request->getParam('peso');
+            $estatura           = $request->getParam('estatura');
+            $imc                = $request->getParam('imc');
+            $tipo_sangre        = $request->getParam('tipo_sangre');
+            $updatedAt          = date('Y-m-d H:i:s');
+
+            $sql = "UPDATE cliente SET
+                nombres             = :nombres,
+                apellido_paterno    = :apellido_paterno,
+                apellido_materno    = :apellido_materno,
+                tipo_documento      = :tipo_documento,
+                numero_documento    = :numero_documento,
+                correo              = :correo,
+                fecha_nacimiento    = :fecha_nacimiento,
+                telefono            = :telefono,
+                sexo                = :sexo,
+                peso                = :peso,
+                estatura            = :estatura,
+                imc                 = :imc,
+                tipo_sangre         = :tipo_sangre,
+                updatedAt           = :updatedAt
+                WHERE idcliente = $idcliente
+            ";
+
+            $resultado = $this->db->prepare($sql);
+            $resultado->bindParam(':nombres', $nombres);
+            $resultado->bindParam(':apellido_paterno', $apellido_paterno);
+            $resultado->bindParam(':apellido_materno', $apellido_materno);
+            $resultado->bindParam(':tipo_documento', $tipo_documento);
+            $resultado->bindParam(':numero_documento', $numero_documento);
+            $resultado->bindParam(':correo', $correo);
+            $resultado->bindParam(':fecha_nacimiento', $fecha_nacimiento);
+            $resultado->bindParam(':telefono',$telefono);
+            $resultado->bindParam(':sexo', $sexo);
+            $resultado->bindParam(':peso', $peso);
+            $resultado->bindParam(':estatura', $estatura);
+            $resultado->bindParam(':imc', $imc);
+            $resultado->bindParam(':tipo_sangre', $tipo_sangre);
+            $resultado->bindParam(':updatedAt', $updatedAt);
+            $resultado->execute();
+
+            return $this->response->withJson([
+                'flag' => 1,
+                'message' => "Se actualizaron los datos correctamente."
+            ]);
+
+
+        } catch (\Exception $th) {
+            return $this->response->withJson([
+                'flag' => 0,
+                'message' => "Error al actualizar los datos.",
+                'error' => $th
+            ]);
+        }
+    });
+
+    /**
+     * Servicio para subir una foto a la carpeta /uploads
+     * El nombre del input tipo file debe ser 'foto'
+     * La foto subida se guarda con un nombre aleatorio mas su extensión en la tabla cliente
+     *
+     * En el header se debe enviar el token con los datos del titular logueado
+     * Ademas, Content-Type : multipart/form-data
+     *
+     * Creado : 16/03/2019
+     * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+     */
+    $app->post('/subir_foto', function(Request $request, Response $response) {
+        // $directory = $this->get('upload_directory');
+        $directory = $this->upload_directory;
+        try {
+            $user = $request->getAttribute('decoded_token_data');
+
+            $idcliente   = (int)$user->idcliente;
+
+            $uploadedFiles = $request->getUploadedFiles();
+
+            $uploadedFile = $uploadedFiles['foto'];
+
+            if ($uploadedFile->getError() === UPLOAD_ERR_OK) {
+                $filename = moveUploadedFile($directory, $uploadedFile);
+
+                $sql = "UPDATE cliente SET foto = '$filename' WHERE idcliente = $idcliente";
+
+                $resultado = $this->db->prepare($sql);
+                $resultado->execute();
+
+                return $this->response->withJson([
+                    'flag' => 1,
+                    'message' => "Se subió la foto: " . $filename . " exitosamente."
+                ]);
+            }
+        } catch (\Exception $th) {
+            return $this->response->withJson([
+                'flag' => 0,
+                'message' => "Error al subir la foto.",
+                'error' => $th
+            ]);
+        }
+    });
 });

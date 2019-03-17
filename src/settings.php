@@ -28,6 +28,10 @@ return [
         'jwt' => [
             'secret' => '9Q?6p1jqjl050I#f@2L6l6zi',
             'encrypt' => 'HS256'
+        ],
+
+        'upload_directory' => [
+            'path' => __DIR__ . '/../uploads/'
         ]
     ],
 ];
