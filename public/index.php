@@ -33,5 +33,7 @@ require __DIR__ . '/../src/config.php';
 
 require __DIR__ . '/../src/upload.php';
 
+require __DIR__ . '/../src/controllers/Acceso.php';
+
 // Run app
 $app->run();
