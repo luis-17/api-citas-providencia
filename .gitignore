@@ -2,4 +2,5 @@
 /uploads/
 /logs/*
 /src/config.php
+/src/settings.php
 !/logs/README.md
