@@ -18,6 +18,7 @@
         "monolog/monolog": "^1.17",
         "tuupola/slim-jwt-auth": "^2.4",
         "akrabat/ip-address-middleware": "^0.6.0",
+        "awurth/slim-validation": "^2.1",
         "phpmailer/phpmailer": "^6.0"
     },
     "require-dev": {

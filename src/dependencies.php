@@ -33,3 +33,7 @@ $container['upload_directory'] = function($c){
     $settings = $c->get('settings')['upload_directory'];
     return $settings['path'];
 };
+
+$container['validator'] = function () {
+    return new Awurth\SlimValidation\Validator();
+};

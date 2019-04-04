@@ -26,12 +26,15 @@ require __DIR__ . '/../src/middleware.php';
 // Register routes
 require __DIR__ . '/../src/routes.php';
 
-require __DIR__ . '/../src/citas.php';
 
 // Seteo configuraciones locales
 require __DIR__ . '/../src/config.php';
 
 require __DIR__ . '/../src/upload.php';
+
+require __DIR__ . '/../src/controllers/Acceso.php';
+require __DIR__ . '/../src/controllers/Cliente.php';
+
 
 // Run app
 $app->run();
