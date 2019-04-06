@@ -22,11 +22,11 @@ $app->post('/login', 'App\Routes\Acceso:login');
 
 $app->post('/registro', 'App\Routes\Acceso:registro');
 
-$app->get('/validaRegistro/{tkn}', 'App\Routes\Acceso:validaRegistro');
+$app->post('/validaRegistro', 'App\Routes\Acceso:validaRegistro');
 
 $app->post('/recuperaPassword', 'App\Routes\Acceso:recuperaPassword');
 
-$app->get('/validaPassword/{tkn}', 'App\Routes\Acceso:validaPassword');
+$app->post('/validaPassword', 'App\Routes\Acceso:validaPassword');
 
 $app->post('/actualizaPassword', 'App\Routes\Acceso:actualizaPassword');
 
