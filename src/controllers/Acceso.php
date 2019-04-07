@@ -270,8 +270,8 @@ class Acceso
                 $mail = new PHPMailer();
                 $mail->IsSMTP(true);
                 $mail->SMTPAuth = true;
-                //$mail->SMTPDebug = true;
-                $mail->SMTPSecure = "tls";
+                $mail->SMTPDebug = false;
+                $mail->SMTPSecure = SMTP_SECURE;
                 $mail->Host = SMTP_HOST;
                 $mail->Port = SMTP_PORT;
                 $mail->Username =  SMTP_USERNAME;
@@ -284,10 +284,11 @@ class Acceso
                 $mail->MsgHTML($mensaje);
                 $mail->CharSet = 'UTF-8';
                 $mail->AddAddress($correo);
-
+                $msgCorreo = NULL;
                 if($mail->Send()){
 
                 }else{
+                    $msgCorreo = 'No se envio correo. ';
                     print_r("No se envio correo");
                 }
 
@@ -295,7 +296,7 @@ class Acceso
 
             return $response->withJson([
                 'flag' => 1,
-                'message' => "El registro fue satisfactorio. Recibirás un mensaje en el correo para verificar la cuenta. En caso de no verlo en tu bandeja de entrada, no olvides revisar la bandeja de spam."
+                'message' => $msgCorreo."El registro fue satisfactorio. Recibirás un mensaje en el correo para verificar la cuenta. En caso de no verlo en tu bandeja de entrada, no olvides revisar la bandeja de spam."
             ]);
 
         } catch (PDOException $e) {
@@ -315,7 +316,9 @@ class Acceso
      */
     public function validaRegistro(Request $request, Response $response, array $args)
     {
+        print_r($request); exit(); 
         $token = $request->getAttribute('tkn');
+
         $settings = $this->app->get('settings')['jwt'];
         if(empty($token))
         {
