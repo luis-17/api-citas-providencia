@@ -314,10 +314,9 @@ class Acceso
      * Creado: 13/03/19
      * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
      */
-    public function validaRegistro(Request $request, Response $response, array $args)
+    public function validaRegistro(Request $request, Response $response)
     {
-        print_r($request); exit(); 
-        $token = $request->getAttribute('tkn');
+        $token = $request->getParam('token');
 
         $settings = $this->app->get('settings')['jwt'];
         if(empty($token))
@@ -479,9 +478,10 @@ class Acceso
      * Creado: 14/03/19
      * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
      */
-    public function validaPassword(Request $request, Response $response, array $args)
+    public function validaPassword(Request $request, Response $response)
     {
-        $token = $request->getAttribute('tkn');
+        $token = $request->getParam('token');
+
         $settings = $this->app->get('settings')['jwt'];
         if(empty($token))
         {
