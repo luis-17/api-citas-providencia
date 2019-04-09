@@ -35,6 +35,8 @@ require __DIR__ . '/../src/upload.php';
 require __DIR__ . '/../src/controllers/Acceso.php';
 require __DIR__ . '/../src/controllers/Cliente.php';
 
-
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PATCH, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Origin, Content-Type, X-Auth-Token');
 // Run app
 $app->run();

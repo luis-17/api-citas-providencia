@@ -2,14 +2,14 @@
 use \Slim\Middleware\JwtAuthentication;
 
 $app->add(new JwtAuthentication([
-    "path" => "/api", /* or ["/api", "/admin"] */
+    "path" => "/api/platform", /* or ["/api", "/admin"] */
     "attribute" => "decoded_token_data",
     "secret" => "9Q?6p1jqjl050I#f@2L6l6zi",
     "algorithm" => ["HS256"],
     "error" => function ($request,$response,$arguments) {
         // echo $arguments;
         $data["status"] = "error";
-        $data["message"] = $arguments["message"];
+        $data["message"] = "Token inválido. Vuelva a iniciar sesión."; // $arguments["message"];
         return $response
             ->withHeader("Content-Type", "application/json")
             ->write(json_encode($data, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
