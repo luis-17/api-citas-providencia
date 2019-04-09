@@ -33,7 +33,7 @@ $app->group('/api', function(\Slim\App $app) {
     $app->post('/actualizaPassword', 'App\Routes\Acceso:actualizaPassword');
 
     $app->group('/platform', function(\Slim\App $app) {
-        $app->get('/cargar_perfil_general', 'App\Routes\Cliente:cargar_perfil_general' );
+        $app->get('/cargar_perfil_general', 'App\Routes\Cliente:cargar_perfil_general');
 
         $app->get('/cargar_familiares', 'App\Routes\Cliente:cargar_familiares');
 
@@ -52,5 +52,11 @@ $app->group('/api', function(\Slim\App $app) {
         $app->post('/cambiar_password', 'App\Routes\Cliente:cambiar_password');
 
         $app->get('/cargar_paciente', 'App\Routes\Cliente:cargar_paciente');
+
+        $app->get('/cargar_paciente', 'App\Routes\Cliente:cargar_paciente');
+
+        $app->get('/cargar_garante', 'App\Routes\Garante:cargar_garante');
+
+        $app->post('/registrar_cita', 'App\Routes\Cita:registrar_cita');
     });
 });
