@@ -71,7 +71,7 @@ class Acceso
                 'username' => $user->username,
                 'idcliente' => $user->idcliente,
                 'ini' => $time,
-                'exp' => $time + (60*60)
+                'exp' => $time + (24*60*60)
             ],
             $settings['secret'],
             $settings['encrypt']

@@ -23,6 +23,8 @@ require __DIR__ . '/../src/dependencies.php';
 // Register middleware
 require __DIR__ . '/../src/middleware.php';
 
+require __DIR__.'/../src/culqi_php.php';
+
 // Register routes
 require __DIR__ . '/../src/routes.php';
 
@@ -36,7 +38,6 @@ require __DIR__ . '/../src/controllers/Acceso.php';
 require __DIR__ . '/../src/controllers/Cliente.php';
 require __DIR__ . '/../src/controllers/Garante.php';
 require __DIR__ . '/../src/controllers/Cita.php';
-
 
 // Run app
 $app->run();
