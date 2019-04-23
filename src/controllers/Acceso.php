@@ -113,6 +113,7 @@ class Acceso
         $tipo_documento     = $request->getParam('tipo_documento');
         $numero_documento   = $request->getParam('numero_documento');
         $correo             = $request->getParam('correo');
+        $celular            = $request->getParam('celular');
         $fecha_nacimiento   = $request->getParam('fecha_nacimiento');
         $sexo               = $request->getParam('sexo');
 
@@ -130,6 +131,7 @@ class Acceso
             'apellido_paterno' => V::notBlank()->alnum(),
             'apellido_materno' => V::notBlank()->alnum(),
             'correo' => V::notBlank()->email(),
+            'celular' => V::notBlank()->digit(),
             'tipo_documento' => V::notBlank()->alpha(),
             'numero_documento' => V::notBlank()->digit(),
             'fecha_nacimiento' => V::date(),
@@ -186,6 +188,7 @@ class Acceso
             tipo_documento,
             numero_documento,
             correo,
+            telefono,
             fecha_nacimiento,
             sexo,
             createdAt,
@@ -198,6 +201,7 @@ class Acceso
             :tipo_documento,
             :numero_documento,
             :correo,
+            :telefono,
             :fecha_nacimiento,
             :sexo,
             :createdAt,
@@ -225,6 +229,7 @@ class Acceso
             $resultado->bindParam(':tipo_documento', $tipo_documento);
             $resultado->bindParam(':numero_documento', $numero_documento);
             $resultado->bindParam(':correo', $correo);
+            $resultado->bindParam(':telefono', $celular);
             $resultado->bindParam(':fecha_nacimiento', $fecha_nacimiento);
             $resultado->bindParam(':sexo', $sexo);
             $resultado->bindParam(':createdAt', $createdAt);
@@ -235,64 +240,62 @@ class Acceso
 
 
             // ENVIAR CORREO PARA VERIFICAR
-                $settings = $this->app->get('settings'); // get settings array.
-                $time = time();
-                $token = JWT::encode(
-                    [
-                        'idusuario' => $idusuario,
-                        'username' => $username,
-                        'iat' => $time,
-                        'exp' => $time + (60*60)
-                    ],
-                    $settings['jwt']['secret'],
-                    $settings['jwt']['encrypt']
-                );
-                // $para = $correo;
-                $paciente = ucwords(strtolower( $nombres . ' ' . $apellido_paterno . ' ' . $apellido_materno));
-                $fromAlias = 'Clínica Providencia';
+            $settings = $this->app->get('settings'); // get settings array.
+            $time = time();
+            $token = JWT::encode(
+                [
+                    'idusuario' => $idusuario,
+                    'username' => $username,
+                    'iat' => $time,
+                    'exp' => $time + (60*60)
+                ],
+                $settings['jwt']['secret'],
+                $settings['jwt']['encrypt']
+            );
+            // $para = $correo;
+            $paciente = ucwords(strtolower( $nombres . ' ' . $apellido_paterno . ' ' . $apellido_materno));
+            $fromAlias = 'Clínica Providencia';
 
-                $asunto = 'Confirma tu cuenta de Clínica Providencia';
-                $mensaje = '<html lang="es">';
-                $mensaje .= '<body style="font-family: sans-serif;padding: 10px 40px;" >';
-                $mensaje .= '<div style="max-width: 700px;align-content: center;margin-left: auto; margin-right: auto;padding-left: 5%; padding-right: 5%;">';
-                $mensaje .= '	<div style="font-size:16px;">
-                                    Estimado(a) paciente: '.$paciente .', <br /> <br /> ';
+            $asunto = 'Confirma tu cuenta de Clínica Providencia';
+            $mensaje = '<html lang="es">';
+            $mensaje .= '<body style="font-family: sans-serif;padding: 10px 40px;" >';
+            $mensaje .= '<div style="max-width: 700px;align-content: center;margin-left: auto; margin-right: auto;padding-left: 5%; padding-right: 5%;">';
+            $mensaje .= '	<div style="font-size:16px;">
+                                Estimado(a) paciente: '.$paciente .', <br /> <br /> ';
 
-                $mensaje .= '     <a href="' . BASE_URL . 'public/validaRegistro/'. $token .'">Haz clic aquí para continuar con el proceso de registro.</a>';
-                $mensaje .= '    </div>';
-                $mensaje .= '    <div>
-                                    <p>Si no has solicitado la suscripción a este correo electrónico, ignóralo y la suscripción no se activará.</p>
-                                </div>';
-                $mensaje .=  '</div>';
-                $mensaje .= '</body>';
-                $mensaje .= '</html>';
+            $mensaje .= '     <a href="' . BASE_URL . 'public/validaRegistro/'. $token .'">Haz clic aquí para continuar con el proceso de registro.</a>';
+            $mensaje .= '    </div>';
+            $mensaje .= '    <div>
+                                <p>Si no has solicitado la suscripción a este correo electrónico, ignóralo y la suscripción no se activará.</p>
+                            </div>';
+            $mensaje .=  '</div>';
+            $mensaje .= '</body>';
+            $mensaje .= '</html>';
 
-                $mail = new PHPMailer();
-                $mail->IsSMTP(true);
-                $mail->SMTPAuth = true;
-                $mail->SMTPDebug = false;
-                $mail->SMTPSecure = SMTP_SECURE;
-                $mail->Host = SMTP_HOST;
-                $mail->Port = SMTP_PORT;
-                $mail->Username =  SMTP_USERNAME;
-                $mail->Password = SMTP_PASSWORD;
-                $mail->SetFrom(SMTP_USERNAME,$fromAlias);
-                $mail->AddReplyTo(SMTP_USERNAME,$fromAlias);
-                $mail->Subject = $asunto;
-                $mail->IsHTML(true);
-                $mail->AltBody = $mensaje;
-                $mail->MsgHTML($mensaje);
-                $mail->CharSet = 'UTF-8';
-                $mail->AddAddress($correo);
-                $msgCorreo = NULL;
-                if($mail->Send()){
+            $mail = new PHPMailer();
+            $mail->IsSMTP(true);
+            $mail->SMTPAuth = true;
+            $mail->SMTPDebug = false;
+            $mail->SMTPSecure = SMTP_SECURE;
+            $mail->Host = SMTP_HOST;
+            $mail->Port = SMTP_PORT;
+            $mail->Username =  SMTP_USERNAME;
+            $mail->Password = SMTP_PASSWORD;
+            $mail->SetFrom(SMTP_USERNAME,$fromAlias);
+            $mail->AddReplyTo(SMTP_USERNAME,$fromAlias);
+            $mail->Subject = $asunto;
+            $mail->IsHTML(true);
+            $mail->AltBody = $mensaje;
+            $mail->MsgHTML($mensaje);
+            $mail->CharSet = 'UTF-8';
+            $mail->AddAddress($correo);
+            $msgCorreo = NULL;
+            if($mail->Send()){
 
-                }else{
-                    $msgCorreo = 'No se envio correo. ';
-                    print_r("No se envio correo");
-                }
-
-
+            }else{
+                $msgCorreo = 'No se envio correo. ';
+                print_r("No se envio correo");
+            }
 
             return $response->withJson([
                 'flag' => 1,

@@ -53,7 +53,7 @@ $app->group('/api', function(\Slim\App $app) {
 
         $app->get('/cargar_paciente', 'App\Routes\Cliente:cargar_paciente');
 
-        $app->get('/cargar_paciente', 'App\Routes\Cliente:cargar_paciente');
+        // $app->get('/cargar_paciente', 'App\Routes\Cliente:cargar_paciente');
 
         $app->get('/cargar_garante', 'App\Routes\Garante:cargar_garante');
 
