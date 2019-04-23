@@ -53,10 +53,12 @@ $app->group('/api', function(\Slim\App $app) {
 
         $app->get('/cargar_paciente', 'App\Routes\Cliente:cargar_paciente');
 
-        // $app->get('/cargar_paciente', 'App\Routes\Cliente:cargar_paciente');
-
         $app->get('/cargar_garante', 'App\Routes\Garante:cargar_garante');
 
         $app->post('/registrar_cita', 'App\Routes\Cita:registrar_cita');
+
+        $app->post('/crear_token_culqi', 'App\Routes\Cita:crear_token_culqi');
+
+        $app->post('/registrar_pago', 'App\Routes\Cita:registrar_pago');
     });
 });
