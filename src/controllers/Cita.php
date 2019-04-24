@@ -16,6 +16,7 @@ class Cita
     }
     /**
      * Registra una cita mandando por json lo siguiente
+     * "idcliente" : 1, // id del cliente que se va a atender
      * "idgarante" : 2,
 	 * "fecha_registro" : "2019-04-08",
 	 * "fecha_cita" : "2019-04-15",
@@ -25,6 +26,7 @@ class Cita
 	 * "especialidad" : "NUTRICION"
      *
      * Creado: 08-04-2019
+     * Modificado: 23-04-2019
      * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
      * @param Request $request
      * @param Response $response
@@ -34,14 +36,15 @@ class Cita
     {
         try {
             $user = $request->getAttribute('decoded_token_data');
-            $idcliente = (int)$user->idcliente;
+            // $idcliente = (int)$user->idcliente;
 
             // VALIDACIONES
                 $validator = $this->app->validator->validate($request, [
-                    'idgarante' => V::notBlank()->digit(),
-                    'especialidad' => V::notBlank()->alnum(),
-                    'medico' => V::notBlank()->alpha(),
-                    'fecha_cita' => V::notBlank()->date(),
+                    'idcliente'     => V::notBlank()->digit(),
+                    'idgarante'     => V::notBlank()->digit(),
+                    'especialidad'  => V::notBlank()->alnum(),
+                    'medico'        => V::notBlank()->alpha(),
+                    'fecha_cita'    => V::notBlank()->date(),
                 ]);
 
                 if ( !$validator->isValid() ) {
@@ -49,6 +52,7 @@ class Cita
                     return $response->withJson(['error' => true, 'message' => $errors]);
                 }
 
+            $idcliente      = $request->getParam('idcliente');
             $idgarante      = $request->getParam('idgarante');
             $fecha_cita     = $request->getParam('fecha_cita');
             $hora_inicio    = $request->getParam('hora_inicio');
@@ -210,5 +214,179 @@ class Cita
                 'error' => $th
             ]);
         }
+    }
+    /**
+     * Carga las citas pendientes de pago tanto del titular como de los familiares del usuario logueado
+     *
+     * Creado: 23-04-2019
+     * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+     * @param Request $request
+     * @param Response $response
+     * @return void
+     */
+    public function cargar_citas_pendientes(Request $request, Response $response, array $args)
+    {
+        try {
+            $user = $request->getAttribute('decoded_token_data');
+
+            $idusuario = $user->idusuario;
+
+            $sql = "
+                SELECT c.*
+                FROM(
+                    SELECT
+                        cit.idcita,
+                        cit.idcliente,
+                        cit.fecha_cita,
+                        cit.hora_inicio,
+                        cit.medico,
+                        cit.especialidad,
+                        CONCAT (CONCAT_WS(' ',cl.nombres, cl.apellido_paterno, cl.apellido_materno), ' | TITULAR') AS paciente,
+                        cl.nombres,
+                        cl.apellido_paterno,
+                        cl.apellido_materno,
+                        'TITULAR' AS parentesco
+                    FROM usuario AS us
+                    JOIN cliente cl ON us.idusuario = cl.idusuario
+                    JOIN cita cit ON cl.idcliente = cit.idcliente
+                    WHERE us.idusuario = :idusuario
+                    AND cit.estado_cita = 1
+
+                    UNION ALL
+
+                    SELECT
+                        cit.idcita,
+                        cit.idcliente,
+                        cit.fecha_cita,
+                        cit.hora_inicio,
+                        cit.medico,
+                        cit.especialidad,
+                        CONCAT (CONCAT_WS(' ',fam.nombres, fam.apellido_paterno, fam.apellido_materno), ' | ', par.descripcion_par) AS paciente,
+                        fam.nombres,
+                        fam.apellido_paterno,
+                        fam.apellido_materno,
+                        par.descripcion_par AS parentesco
+                    FROM usuario AS us
+                    JOIN cliente cl ON us.idusuario = cl.idusuario
+                    JOIN cliente fam ON cl.idcliente = fam.idtitularcliente
+                    JOIN parentesco par ON fam.idparentesco = par.idparentesco
+                    JOIN cita cit ON fam.idcliente = cit.idcliente
+                    WHERE us.idusuario = :idusuario
+                    AND cit.estado_cita = 1
+                ) AS c
+                ORDER BY c.fecha_cita DESC
+            ";
+
+            $resultado = $this->app->db->prepare($sql);
+            $resultado->bindParam(":idusuario", $idusuario);
+            $resultado->execute();
+            if ($data = $resultado->fetchAll()) {
+                $message = "Se encontraron citas pendientes";
+                $flag = 1;
+            }else{
+                $message = "No tiene citas pendientes";
+                $flag = 0;
+            }
+
+            return $response->withJson([
+                'datos' => $data,
+                'flag' => $flag,
+                'message' => $message
+            ]);
+
+        } catch (\Exception $th) {
+            return $response->withJson([
+                'flag' => 0,
+                'message' => "El token no es válido o ya no está disponible."
+            ]);
+        }
+
+    }
+    /**
+     * Carga las citas pagadas tanto del titular como de los familiares del usuario logueado
+     *
+     * Creado: 23-04-2019
+     * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+     * @param Request $request
+     * @param Response $response
+     * @return void
+     */
+    public function cargar_citas_realizadas(Request $request, Response $response, array $args)
+    {
+        try {
+            $user = $request->getAttribute('decoded_token_data');
+
+            $idusuario = $user->idusuario;
+
+            $sql = "
+                SELECT c.*
+                FROM(
+                    SELECT
+                        cit.idcita,
+                        cit.idcliente,
+                        cit.fecha_cita,
+                        cit.hora_inicio,
+                        cit.medico,
+                        cit.especialidad,
+                        CONCAT (CONCAT_WS(' ',cl.nombres, cl.apellido_paterno, cl.apellido_materno), ' | TITULAR') AS paciente,
+                        cl.nombres,
+                        cl.apellido_paterno,
+                        cl.apellido_materno,
+                        'TITULAR' AS parentesco
+                    FROM usuario AS us
+                    JOIN cliente cl ON us.idusuario = cl.idusuario
+                    JOIN cita cit ON cl.idcliente = cit.idcliente
+                    WHERE us.idusuario = :idusuario
+                    AND cit.estado_cita = 2
+
+                    UNION ALL
+
+                    SELECT
+                        cit.idcita,
+                        cit.idcliente,
+                        cit.fecha_cita,
+                        cit.hora_inicio,
+                        cit.medico,
+                        cit.especialidad,
+                        CONCAT (CONCAT_WS(' ',fam.nombres, fam.apellido_paterno, fam.apellido_materno), ' | ', par.descripcion_par) AS paciente,
+                        fam.nombres,
+                        fam.apellido_paterno,
+                        fam.apellido_materno,
+                        par.descripcion_par AS parentesco
+                    FROM usuario AS us
+                    JOIN cliente cl ON us.idusuario = cl.idusuario
+                    JOIN cliente fam ON cl.idcliente = fam.idtitularcliente
+                    JOIN parentesco par ON fam.idparentesco = par.idparentesco
+                    JOIN cita cit ON fam.idcliente = cit.idcliente
+                    WHERE us.idusuario = :idusuario
+                    AND cit.estado_cita = 2
+                ) AS c
+                ORDER BY c.fecha_cita DESC
+            ";
+
+            $resultado = $this->app->db->prepare($sql);
+            $resultado->bindParam(":idusuario", $idusuario);
+            $resultado->execute();
+            if ($data = $resultado->fetchAll()) {
+                $message = "Se encontraron citas realizadas";
+                $flag = 1;
+            }else{
+                $message = "No tiene citas realizadas";
+                $flag = 0;
+            }
+
+            return $response->withJson([
+                'datos' => $data,
+                'flag' => $flag,
+                'message' => $message
+            ]);
+
+        } catch (\Exception $th) {
+            return $response->withJson([
+                'flag' => 0,
+                'message' => "El token no es válido o ya no está disponible."
+            ]);
+        }
+
     }
 }
