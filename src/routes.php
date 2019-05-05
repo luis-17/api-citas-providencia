@@ -60,5 +60,9 @@ $app->group('/api', function(\Slim\App $app) {
         $app->post('/crear_token_culqi', 'App\Routes\Cita:crear_token_culqi');
 
         $app->post('/registrar_pago', 'App\Routes\Cita:registrar_pago');
+
+        $app->get('/cargar_citas_pendientes', 'App\Routes\Cita:cargar_citas_pendientes');
+
+        $app->get('/cargar_citas_realizadas', 'App\Routes\Cita:cargar_citas_realizadas');
     });
 });
