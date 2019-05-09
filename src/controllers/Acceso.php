@@ -141,7 +141,7 @@ class Acceso
 
         if ( !$validator->isValid() ) {
             $errors = $validator->getErrors();
-            return $response->withJson(['error' => true, 'message' => $errors]);
+            return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
         }
 
         // QUERY
@@ -161,9 +161,10 @@ class Acceso
         $usuario = $resultado->fetchObject();
 
         if($usuario){
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
+                'error' => true,
                 'flag' => 0,
-                'message' => "El usuario ya existe"
+                'message' => "Ya tienes una cuenta con nosotros. Inicia sesión con tus credenciales."
             ]);
         }
 
@@ -397,7 +398,7 @@ class Acceso
                     'message' => "Tu cuenta ha sido verificada exitosamente... Ya puedes iniciar sesión para comenzar a disfrutar los beneficios de ser un paciente de Clínica Providencia!."
                 ]);
             } catch (PDOException $e) {
-                return $response->withJson([
+                return $response->withStatus(400)->withJson([
                     'flag' => 0,
                     'message' => "Ocurrió un error. Inténtelo nuevamente."
                 ]);
@@ -405,7 +406,7 @@ class Acceso
             return $response->withJson($decode);
             //code...
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "El enlace no es válido o ya no está disponible."
             ]);
@@ -426,7 +427,7 @@ class Acceso
 
         if ( !$validator->isValid() ) {
             $errors = $validator->getErrors();
-            return $response->withJson(['error' => true, 'message' => $errors]);
+            return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
         }
 
         $numero_documento = $request->getParam('numero_documento');
@@ -455,7 +456,7 @@ class Acceso
         $user = $resultado->fetchObject();
 
         if( empty($user) ){
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "El número de documento no se encuentra registrado en el sistema."
             ]);
@@ -519,7 +520,7 @@ class Acceso
                 ]);
 
             }else{
-                return $response->withJson([
+                return $response->withStatus(400)->withJson([
                     'flag' => 0,
                     'message' => "Ocurrió un error en el envio de correo. Inténtelo nuevamente"
                 ]);
@@ -589,13 +590,13 @@ class Acceso
                     'message' => "Tu contraseña se actualizó exitosamente."
                 ]);
             } catch (PDOException $e) {
-                return $response->withJson([
+                return $response->withStatus(400)->withJson([
                     'flag' => 0,
                     'message' => "Ocurrió un error. Inténtelo nuevamente."
                 ]);
             }
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "El enlace no es válido o ya no está disponible."
             ]);
