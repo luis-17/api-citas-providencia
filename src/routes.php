@@ -32,6 +32,7 @@ $app->group('/api', function(\Slim\App $app) {
 
     $app->post('/actualizaPassword', 'App\Routes\Acceso:actualizaPassword');
 
+
     $app->group('/platform', function(\Slim\App $app) {
         $app->get('/cargar_perfil_general', 'App\Routes\Cliente:cargar_perfil_general');
 
@@ -64,5 +65,10 @@ $app->group('/api', function(\Slim\App $app) {
         $app->get('/cargar_citas_pendientes', 'App\Routes\Cita:cargar_citas_pendientes');
 
         $app->get('/cargar_citas_realizadas', 'App\Routes\Cita:cargar_citas_realizadas');
+
+        $app->get('/cargar_especialidades', 'App\Routes\Cita:cargar_especialidades');
+
+        $app->post('/cargar_medicos_por_especialidad', 'App\Routes\Cita:cargar_medicos_por_especialidad');
+
     });
 });

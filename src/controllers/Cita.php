@@ -216,15 +216,15 @@ class Cita
         }
     }
     /**
-     * Carga las citas pendientes de pago tanto del titular como de los familiares del usuario logueado
+     * Carga las especialidades para seleccionar
      *
-     * Creado: 23-04-2019
+     * Creado: 08-05-2019
      * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
      * @param Request $request
      * @param Response $response
      * @return void
      */
-    public function cargar_citas_pendientes(Request $request, Response $response, array $args)
+    public function cargar_especialidades(Request $request, Response $response, array $args)
     {
         try {
             $user = $request->getAttribute('decoded_token_data');
@@ -232,60 +232,36 @@ class Cita
             $idusuario = $user->idusuario;
 
             $sql = "
-                SELECT c.*
-                FROM(
-                    SELECT
-                        cit.idcita,
-                        cit.idcliente,
-                        cit.fecha_cita,
-                        cit.hora_inicio,
-                        cit.medico,
-                        cit.especialidad,
-                        CONCAT (CONCAT_WS(' ',cl.nombres, cl.apellido_paterno, cl.apellido_materno), ' | TITULAR') AS paciente,
-                        cl.nombres,
-                        cl.apellido_paterno,
-                        cl.apellido_materno,
-                        'TITULAR' AS parentesco
-                    FROM usuario AS us
-                    JOIN cliente cl ON us.idusuario = cl.idusuario
-                    JOIN cita cit ON cl.idcliente = cit.idcliente
-                    WHERE us.idusuario = :idusuario
-                    AND cit.estado_cita = 1
-
-                    UNION ALL
-
-                    SELECT
-                        cit.idcita,
-                        cit.idcliente,
-                        cit.fecha_cita,
-                        cit.hora_inicio,
-                        cit.medico,
-                        cit.especialidad,
-                        CONCAT (CONCAT_WS(' ',fam.nombres, fam.apellido_paterno, fam.apellido_materno), ' | ', par.descripcion_par) AS paciente,
-                        fam.nombres,
-                        fam.apellido_paterno,
-                        fam.apellido_materno,
-                        par.descripcion_par AS parentesco
-                    FROM usuario AS us
-                    JOIN cliente cl ON us.idusuario = cl.idusuario
-                    JOIN cliente fam ON cl.idcliente = fam.idtitularcliente
-                    JOIN parentesco par ON fam.idparentesco = par.idparentesco
-                    JOIN cita cit ON fam.idcliente = cit.idcliente
-                    WHERE us.idusuario = :idusuario
-                    AND cit.estado_cita = 1
-                ) AS c
-                ORDER BY c.fecha_cita DESC
+                SELECT
+                    esp.IdEspecialidad,
+                    esp.Codigo,
+                    esp.Descripcion,
+                    esp.CantidadCitasAdicional
+                FROM
+                    SS_GE_Especialidad esp
+                WHERE
+                    esp.Estado = 2
             ";
 
-            $resultado = $this->app->db->prepare($sql);
-            $resultado->bindParam(":idusuario", $idusuario);
+            $resultado = $this->app->db_mssql->prepare($sql);
             $resultado->execute();
-            if ($data = $resultado->fetchAll()) {
-                $message = "Se encontraron citas pendientes";
+            if ($lista = $resultado->fetchAll()) {
+                $message = "Se encontraron especialidades";
                 $flag = 1;
             }else{
-                $message = "No tiene citas pendientes";
+                $message = "No se encontraron especialidades";
                 $flag = 0;
+            }
+            $data = array();
+            foreach ($lista as $row) {
+                array_push($data,
+                    array(
+                        'idespecialidad'    => $row['IdEspecialidad'],
+                        'codigo'            => $row['Codigo'],
+                        'descripcion'       => iconv("windows-1252", "utf-8", $row['Descripcion']),
+                        'adicionales'       => $row['CantidadCitasAdicional'],
+                    )
+                );
             }
 
             return $response->withJson([
@@ -297,13 +273,13 @@ class Cita
         } catch (\Exception $th) {
             return $response->withJson([
                 'flag' => 0,
-                'message' => "El token no es válido o ya no está disponible."
+                'message' => $th
             ]);
         }
 
     }
     /**
-     * Carga las citas pagadas tanto del titular como de los familiares del usuario logueado
+     * Carga medicos segun la especialidad elegida
      *
      * Creado: 23-04-2019
      * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
@@ -311,70 +287,79 @@ class Cita
      * @param Response $response
      * @return void
      */
-    public function cargar_citas_realizadas(Request $request, Response $response, array $args)
+    public function cargar_medicos_por_especialidad(Request $request, Response $response, array $args)
     {
         try {
             $user = $request->getAttribute('decoded_token_data');
 
             $idusuario = $user->idusuario;
 
+            // VALIDACIONES
+                $validator = $this->app->validator->validate($request, [
+                    'periodo'           => V::notBlank()->digit(),
+                    'idespecialidad'    => V::notBlank()->digit()
+                ]);
+
+                if ( !$validator->isValid() ) {
+                    $errors = $validator->getErrors();
+                    return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
+                }
+
+            $periodo        = $request->getParam('periodo');
+            $idespecialidad = $request->getParam('idespecialidad');
+
             $sql = "
-                SELECT c.*
-                FROM(
-                    SELECT
-                        cit.idcita,
-                        cit.idcliente,
-                        cit.fecha_cita,
-                        cit.hora_inicio,
-                        cit.medico,
-                        cit.especialidad,
-                        CONCAT (CONCAT_WS(' ',cl.nombres, cl.apellido_paterno, cl.apellido_materno), ' | TITULAR') AS paciente,
-                        cl.nombres,
-                        cl.apellido_paterno,
-                        cl.apellido_materno,
-                        'TITULAR' AS parentesco
-                    FROM usuario AS us
-                    JOIN cliente cl ON us.idusuario = cl.idusuario
-                    JOIN cita cit ON cl.idcliente = cit.idcliente
-                    WHERE us.idusuario = :idusuario
-                    AND cit.estado_cita = 2
+                SELECT DISTINCT
+                    hor.Medico,
+                    hor.IdEspecialidad,
+                    hor.Estado,
+                    empl.CMP,
+                    empl.Foto,
+                    per.NombreCompleto
+                FROM SS_CC_Horario hor
+                LEFT JOIN SS_GE_Servicio serv ON hor.IdServicio = serv.IdServicio
+                LEFT JOIN PersonaMast per ON hor.Medico = per.Persona
+                LEFT JOIN EmpleadoMast empl ON hor.Medico = empl.Empleado
+                LEFT JOIN SS_GE_GrupoConsultorio cons ON hor.IdConsultorio = cons.IdConsultorio
+                WHERE hor.Periodo = " . $periodo . "
+					AND hor.Estado = 2
+					AND empl.Estado = 'A'
+					AND per.Estado = 'A'
+					AND (
+							( hor.IdEspecialidad = " . $idespecialidad . "
+								AND  cons.IdGrupoAtencion = 1 AND
+								serv.IdServicio = 1
+							) OR
+							( hor.IndicadorCompartido = 2 AND
+								hor.IdGrupoAtencionCompartido = 1 AND
+								hor.IdEspecialidad = " . $idespecialidad . "
+							)
+						)
 
-                    UNION ALL
-
-                    SELECT
-                        cit.idcita,
-                        cit.idcliente,
-                        cit.fecha_cita,
-                        cit.hora_inicio,
-                        cit.medico,
-                        cit.especialidad,
-                        CONCAT (CONCAT_WS(' ',fam.nombres, fam.apellido_paterno, fam.apellido_materno), ' | ', par.descripcion_par) AS paciente,
-                        fam.nombres,
-                        fam.apellido_paterno,
-                        fam.apellido_materno,
-                        par.descripcion_par AS parentesco
-                    FROM usuario AS us
-                    JOIN cliente cl ON us.idusuario = cl.idusuario
-                    JOIN cliente fam ON cl.idcliente = fam.idtitularcliente
-                    JOIN parentesco par ON fam.idparentesco = par.idparentesco
-                    JOIN cita cit ON fam.idcliente = cit.idcliente
-                    WHERE us.idusuario = :idusuario
-                    AND cit.estado_cita = 2
-                ) AS c
-                ORDER BY c.fecha_cita DESC
             ";
 
-            $resultado = $this->app->db->prepare($sql);
-            $resultado->bindParam(":idusuario", $idusuario);
+            $resultado = $this->app->db_mssql->prepare($sql);
+            // $resultado->bindParam(':periodo', $periodo);
+            // $resultado->bindParam(':idespecialidad', $idespecialidad);
+
             $resultado->execute();
-            if ($data = $resultado->fetchAll()) {
+            if ($lista = $resultado->fetchAll()) {
                 $message = "Se encontraron citas realizadas";
                 $flag = 1;
             }else{
                 $message = "No tiene citas realizadas";
                 $flag = 0;
             }
-
+			$data = array();
+            foreach ($lista as $row) {
+                array_push($data,
+                    array(
+                        'idmedico'    		=> $row['Medico'],
+                        'descripcion'       => iconv("windows-1252", "utf-8", $row['NombreCompleto']),
+                        'idespecialidad'    => $row['IdEspecialidad']
+                    )
+                );
+            }
             return $response->withJson([
                 'datos' => $data,
                 'flag' => $flag,
@@ -384,7 +369,7 @@ class Cita
         } catch (\Exception $th) {
             return $response->withJson([
                 'flag' => 0,
-                'message' => "El token no es válido o ya no está disponible."
+                'message' => 'Ocurrió un error al cargar los medicos'
             ]);
         }
 
