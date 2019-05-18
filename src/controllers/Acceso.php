@@ -33,7 +33,7 @@ class Acceso
 
         if ( !$validator->isValid() ) {
             $errors = $validator->getErrors();
-            return $response->withJson(['error' => true, 'message' => $errors]);
+            return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
         }
         // QUERY
         $sql = "
@@ -225,7 +225,6 @@ class Acceso
             $idusuario =  $this->app->db->lastInsertId();
 
             if( $idusuario > 0 ){
-
                 // REGISTRO DE CLIENTE
                 $resultado = $this->app->db->prepare($sql2);
                 $resultado->bindParam(':idusuario', $idusuario);
@@ -254,7 +253,7 @@ class Acceso
             if( $error === false){
                 $this->app->db->commit();
                 // ENVIAR CORREO PARA VERIFICAR
-                $settings = $this->app->get('settings'); // get settings array.
+                $settings = $this->app->get('settings'); 
                 $time = time();
                 $token = JWT::encode(
                     [
@@ -277,7 +276,7 @@ class Acceso
                 $mensaje .= '	<div style="font-size:16px;">
                                     Estimado(a) paciente: '.$paciente .', <br /> <br /> ';
 
-                $mensaje .= '     <a href="' . BASE_URL . 'public/validaRegistro/'. $token .'">Haz clic aquí para continuar con el proceso de registro.</a>';
+                $mensaje .= '     <a href="' . FRONT_URL . 'validar-cuenta/'. $token .'">Haz clic aquí para continuar con el proceso de registro.</a>';
                 $mensaje .= '    </div>';
                 $mensaje .= '    <div>
                                     <p>Si no has solicitado la suscripción a este correo electrónico, ignóralo y la suscripción no se activará.</p>
@@ -310,43 +309,6 @@ class Acceso
                     $msgCorreo = 'No se envio correo. ';
                     print_r("No se envio correo");
                 }
-// >>>>>>> c56a42ef49bce79b6de7c8861d594a9a2f98a120
-
-            $mensaje .= '     <a href="' . BASE_URL . 'public/validaRegistro/'. $token .'">Haz clic aquí para continuar con el proceso de registro.</a>';
-            $mensaje .= '    </div>';
-            $mensaje .= '    <div>
-                                <p>Si no has solicitado la suscripción a este correo electrónico, ignóralo y la suscripción no se activará.</p>
-                            </div>';
-            $mensaje .=  '</div>';
-            $mensaje .= '</body>';
-            $mensaje .= '</html>';
-
-            $mail = new PHPMailer();
-            $mail->IsSMTP(true);
-            $mail->SMTPAuth = true;
-            $mail->SMTPDebug = false;
-            $mail->SMTPSecure = SMTP_SECURE;
-            $mail->Host = SMTP_HOST;
-            $mail->Port = SMTP_PORT;
-            $mail->Username =  SMTP_USERNAME;
-            $mail->Password = SMTP_PASSWORD;
-            $mail->SetFrom(SMTP_USERNAME,$fromAlias);
-            $mail->AddReplyTo(SMTP_USERNAME,$fromAlias);
-            $mail->Subject = $asunto;
-            $mail->IsHTML(true);
-            $mail->AltBody = $mensaje;
-            $mail->MsgHTML($mensaje);
-            $mail->CharSet = 'UTF-8';
-            $mail->AddAddress($correo);
-            $msgCorreo = NULL;
-            if($mail->Send()){
-
-            }else{
-                $msgCorreo = 'No se envio correo. ';
-                print_r("No se envio correo");
-            }
-
-
                 return $response->withJson([
                     'flag' => 1,
                     'message' => $msgCorreo."El registro fue satisfactorio. Recibirás un mensaje en el correo para verificar la cuenta. En caso de no verlo en tu bandeja de entrada, no olvides revisar la bandeja de spam."
@@ -354,11 +316,9 @@ class Acceso
             }else{
                $this->app->db->rollback();
             }
-
-
         } catch (PDOException $e) {
             $this->app->db->rollback();
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "Ocurrió un error. " . $e->getMessage()
             ]);
@@ -403,8 +363,6 @@ class Acceso
                     'message' => "Ocurrió un error. Inténtelo nuevamente."
                 ]);
             }
-            return $response->withJson($decode);
-            //code...
         } catch (\Exception $th) {
             return $response->withStatus(400)->withJson([
                 'flag' => 0,
@@ -486,7 +444,7 @@ class Acceso
             $mensaje .= '	<div style="font-size:16px;">
                                 Estimado(a) paciente: '.$paciente .', <br /> <br /> ';
 
-            $mensaje .= '     <a href="' . BASE_URL . 'public/validaPassword/'. $token .'">Haz clic aquí para continuar con el proceso de recuperación de contraseña.</a>';
+            $mensaje .= '     <a href="' . FRONT_URL . 'recuperar-cuenta/'. $token .'">Haz clic aquí para continuar con el proceso de recuperación de contraseña.</a>';
             $mensaje .= '    </div>';
             $mensaje .= '    <div>
                                 <p>Si no has solicitado el cambio de contraseña a este correo electrónico, ignóralo y el cambio no se realizará..</p>
@@ -559,7 +517,7 @@ class Acceso
             ]);
             //code...
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "El token no es válido o ya no está disponible."
             ]);

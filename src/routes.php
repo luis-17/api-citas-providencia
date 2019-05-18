@@ -17,9 +17,11 @@ $app->get('/[{name}]', function (Request $request, Response $response, array $ar
     // Render index view
     return $this->renderer->render($response, 'index.phtml', $args);
 });
-
+// $app->hook('slim.before', function () use ($app) {
+//     $app->view()->appendData(array('baseFile' => '/uploads'));
+// });
 $app->group('/api', function(\Slim\App $app) {
-
+    
     $app->post('/login', 'App\Routes\Acceso:login');
 
     $app->post('/registro', 'App\Routes\Acceso:registro');
