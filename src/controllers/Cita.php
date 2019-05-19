@@ -432,6 +432,7 @@ class Cita
                     AND cit.fecha_cita >= NOW() 
                 ) AS c
                 ORDER BY c.fecha_cita DESC
+                LIMIT 10
             ";
             $resultado = $this->app->db->prepare($sql);
             $resultado->bindParam(":idusuario", $idusuario);
@@ -513,6 +514,7 @@ class Cita
                     AND cit.fecha_cita < NOW() 
                 ) AS c
                 ORDER BY c.fecha_cita DESC
+                LIMIT 10
             ";
             $resultado = $this->app->db->prepare($sql);
             $resultado->bindParam(":idusuario", $idusuario);
