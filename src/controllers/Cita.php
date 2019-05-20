@@ -291,7 +291,7 @@ class Cita
                 NULL,
                 1,
                 NULL);
-            ");
+            ";
             $resultado = $this->app->db_mssql->prepare($sql);
             $resultado->execute();
 
