@@ -582,141 +582,168 @@ class Cita
         }
 
     }
-
-    public function verifica_cliente(Request $request, Response $response, array $args)
+    /**
+     * Carga las citas pendientes de pago tanto del titular como de los familiares del usuario logueado
+     *
+     * Creado: 23-04-2019
+     * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+     * @param Request $request
+     * @param Response $response
+     * @return void
+     */
+    public function cargar_citas_pendientes(Request $request, Response $response, array $args)
     {
-        $idcliente      = $request->getParam('idcliente');
-
-        $sql = "
-                SELECT
-                    cl.idcliente,
-                    cl.nombres,
-                    cl.apellido_paterno,
-                    cl.apellido_materno,
-                    cl.tipo_documento,
-                    cl.numero_documento,
-                    cl.correo,
-                    cl.sexo,
-                    cl.telefono,
-                    cl.peso,
-                    cl.estatura,
-                    cl.tipo_sangre,
-                    cl.fecha_nacimiento
-                FROM cliente cl
-                WHERE cl.idcliente = :idcliente
-                LIMIT 1
+        try {
+            $user = $request->getAttribute('decoded_token_data');
+            $idusuario = $user->idusuario;
+            $sql = "
+                SELECT c.*
+                FROM(
+                    SELECT
+                        cit.idcita,
+                        cit.idcliente,
+                        cit.fecha_cita,
+                        cit.hora_inicio,
+                        cit.medico,
+                        cit.especialidad,
+                        CONCAT (CONCAT_WS(' ',cl.nombres, cl.apellido_paterno, cl.apellido_materno), ' | TITULAR') AS paciente,
+                        cl.nombres,
+                        cl.apellido_paterno,
+                        cl.apellido_materno,
+                        'TITULAR' AS parentesco
+                    FROM usuario AS us
+                    JOIN cliente cl ON us.idusuario = cl.idusuario
+                    JOIN cita cit ON cl.idcliente = cit.idcliente
+                    WHERE us.idusuario = :idusuario
+                    AND cit.estado_cita IN (1,2)
+                    AND cit.fecha_cita >= NOW()
+                    UNION ALL
+                    SELECT
+                        cit.idcita,
+                        cit.idcliente,
+                        cit.fecha_cita,
+                        cit.hora_inicio,
+                        cit.medico,
+                        cit.especialidad,
+                        CONCAT (CONCAT_WS(' ',fam.nombres, fam.apellido_paterno, fam.apellido_materno), ' | ', par.descripcion_par) AS paciente,
+                        fam.nombres,
+                        fam.apellido_paterno,
+                        fam.apellido_materno,
+                        par.descripcion_par AS parentesco
+                    FROM usuario AS us
+                    JOIN cliente cl ON us.idusuario = cl.idusuario
+                    JOIN cliente fam ON cl.idcliente = fam.idtitularcliente
+                    JOIN parentesco par ON fam.idparentesco = par.idparentesco
+                    JOIN cita cit ON fam.idcliente = cit.idcliente
+                    WHERE us.idusuario = :idusuario
+                    AND cit.estado_cita IN (1,2)
+                    AND cit.fecha_cita >= NOW()
+                ) AS c
+                ORDER BY c.fecha_cita DESC
+                LIMIT 10
             ";
-
             $resultado = $this->app->db->prepare($sql);
-            $resultado->bindParam(":idcliente", $idcliente);
+            $resultado->bindParam(":idusuario", $idusuario);
             $resultado->execute();
-            $cliente = $resultado->fetchObject();
-            $nombreCompleto = $cliente->apellido_paterno . ' ' . $cliente->apellido_materno . ' , ' . $cliente->nombres;
-
-        // Verificacion si existe cliente
-            $sql = "SELECT TOP 1 Persona IdPaciente
-                    FROM PersonaMast cli
-                    WHERE ( cli.TipoDocumentoIdentidad ='D'
-                        AND cli.DocumentoIdentidad = '". $cliente->numero_documento ."' )
-                        OR ( cli.TipoDocumento ='D' AND cli.Documento = '". $cliente->numero_documento ."' )
-            ";
-            $resultado = $this->app->db_mssql->prepare($sql);
-            $resultado->execute();
-            $res = $resultado->fetchAll();
-            if( count($res) > 0 ){
-                $paciente = $res[0];
-                $IdPaciente = $paciente['IdPaciente'];
+            if ($data = $resultado->fetchAll()) {
+                $message = "Se encontraron citas pendientes";
+                $flag = 1;
             }else{
-                // Obtener el ultimo registro de PersonaMast
-                $sql = "SELECT max ( PersonaMast.Persona ) id FROM PersonaMast ";
-                $resultado = $this->app->db_mssql->prepare($sql);
-                $resultado->execute();
-                $res = $resultado->fetchAll();
-                $IdPaciente = (int)$res[0]['id'] + 1;
-
-                // Registro de PersonaMast
-                $sql = "INSERT INTO PersonaMast (
-                        Persona,
-                        Busqueda,
-                        TipoDocumentoIdentidad,
-                        DocumentoIdentidad,
-                        Origen,
-                        ApellidoPaterno,
-                        ApellidoMaterno,
-                        Nombres,
-                        NombreCompleto,
-                        FechaNacimiento,
-                        Sexo,
-                        EstadoCivil,
-                        EsPaciente,
-                        EsEmpresa,
-                        Estado,
-                        UltimoUsuario,
-                        UltimaFechaModif,
-                        IndicadorAutogenerado,
-                        TipoDocumento,
-                        Documento,
-                        TipoPersona
-                    ) VALUES (
-                        $IdPaciente,
-                        '".$nombreCompleto."',
-                        'D',
-                        '".$cliente->numero_documento."',
-                        'LIMA',
-                        '".$cliente->apellido_paterno."',
-                        '".$cliente->apellido_materno."',
-                        '".$cliente->nombres."',
-                        '".$nombreCompleto."',
-                        '".date('d-m-Y', strtotime($cliente->fecha_nacimiento))."',
-                        '".$cliente->sexo."',
-                        'S',
-                        'S',
-                        'N',
-                        'A',
-                        '',
-                        '" . date('d-m-Y H:i:s') ."',
-                        1,
-                        'D',
-                        '".$cliente->numero_documento."',
-                        'N'
-                    );
-                ";
-                $resultado = $this->app->db_mssql->prepare($sql);
-                $resultado->execute();
-
-                // Registro de SS_GE_Paciente
-                $sql = " INSERT INTO SS_GE_Paciente (
-                        IdPaciente,
-                        IndicadorNuevo,
-                        TipoAlmacenamiento,
-                        FechaIngreso,
-                        Estado,
-                        UsuarioCreacion,
-                        FechaCreacion,
-                        UsuarioModificacion,
-                        FechaModificacion
-                    )
-                    VALUES (
-                        $IdPaciente,
-                        2,
-                        'AC',
-                        '" . date('d-m-Y H:i:s') ."',
-                        2,
-                        'RCORTEZ',
-                        '" . date('d-m-Y H:i:s') ."',
-                        '',
-                        '" . date('d-m-Y H:i:s') ."'
-                    );
-                ";
-
-                $resultado = $this->app->db_mssql->prepare($sql);
-                $resultado->execute();
+                $message = "No tiene citas pendientes";
+                $flag = 0;
             }
-
-             return $response->withJson([
-                'datos' => $IdPaciente
-
+            return $response->withJson([
+                'datos' => $data,
+                'flag' => $flag,
+                'message' => $message
             ]);
-
+        } catch (\Exception $th) {
+            return $response->withJson([
+                'flag' => 0,
+                'message' => "El token no es válido o ya no está disponible."
+            ]);
+        }
+    }
+    /**
+     * Carga las citas pagadas tanto del titular como de los familiares del usuario logueado
+     *
+     * Creado: 23-04-2019
+     * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+     * @param Request $request
+     * @param Response $response
+     * @return void
+     */
+    public function cargar_citas_realizadas(Request $request, Response $response, array $args)
+    {
+        try {
+            $user = $request->getAttribute('decoded_token_data');
+            $idusuario = $user->idusuario;
+            $sql = "
+                SELECT c.*
+                FROM(
+                    SELECT
+                        cit.idcita,
+                        cit.idcliente,
+                        cit.fecha_cita,
+                        cit.hora_inicio,
+                        cit.medico,
+                        cit.especialidad,
+                        CONCAT (CONCAT_WS(' ',cl.nombres, cl.apellido_paterno, cl.apellido_materno), ' | TITULAR') AS paciente,
+                        cl.nombres,
+                        cl.apellido_paterno,
+                        cl.apellido_materno,
+                        'TITULAR' AS parentesco
+                    FROM usuario AS us
+                    JOIN cliente cl ON us.idusuario = cl.idusuario
+                    JOIN cita cit ON cl.idcliente = cit.idcliente
+                    WHERE us.idusuario = :idusuario
+                    AND cit.estado_cita IN (1,2)
+                    AND cit.fecha_cita < NOW()
+                    UNION ALL
+                    SELECT
+                        cit.idcita,
+                        cit.idcliente,
+                        cit.fecha_cita,
+                        cit.hora_inicio,
+                        cit.medico,
+                        cit.especialidad,
+                        CONCAT (CONCAT_WS(' ',fam.nombres, fam.apellido_paterno, fam.apellido_materno), ' | ', par.descripcion_par) AS paciente,
+                        fam.nombres,
+                        fam.apellido_paterno,
+                        fam.apellido_materno,
+                        par.descripcion_par AS parentesco
+                    FROM usuario AS us
+                    JOIN cliente cl ON us.idusuario = cl.idusuario
+                    JOIN cliente fam ON cl.idcliente = fam.idtitularcliente
+                    JOIN parentesco par ON fam.idparentesco = par.idparentesco
+                    JOIN cita cit ON fam.idcliente = cit.idcliente
+                    WHERE us.idusuario = :idusuario
+                    AND cit.estado_cita IN (1,2)
+                    AND cit.fecha_cita < NOW()
+                ) AS c
+                ORDER BY c.fecha_cita DESC
+                LIMIT 10
+            ";
+            $resultado = $this->app->db->prepare($sql);
+            $resultado->bindParam(":idusuario", $idusuario);
+            $resultado->execute();
+            if ($data = $resultado->fetchAll()) {
+                $message = "Se encontraron citas realizadas";
+                $flag = 1;
+            }else{
+                $message = "No tiene citas realizadas";
+                $flag = 0;
+            }
+            return $response->withJson([
+                'datos' => $data,
+                'flag' => $flag,
+                'message' => $message
+            ]);
+        } catch (\Exception $th) {
+            return $response->withJson([
+                'flag' => 0,
+                'message' => "El token no es válido o ya no está disponible."
+            ]);
+        }
     }
 }

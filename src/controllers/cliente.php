@@ -18,6 +18,8 @@ class Cliente
     public function cargar_perfil_general(Request $request, Response $response, array $args)
     {
         try {
+            // var_dump( baseFile(), 'baseFile' );
+            // var_dump($request->getUri()->getBasePath()); exit();
             $user = $request->getAttribute('decoded_token_data');
 
             $idusuario = $user->idusuario;
@@ -38,8 +40,11 @@ class Cliente
                     cl.telefono,
                     cl.peso,
                     cl.estatura,
+                    cl.imc,
                     cl.tipo_sangre,
-                    cl.fecha_nacimiento
+                    cl.foto,
+                    DATE_FORMAT(cl.fecha_nacimiento, '%d-%m-%Y') as fecha_nacimiento,
+                    YEAR(CURDATE()) - YEAR(cl.fecha_nacimiento) AS edad 
                 FROM usuario AS us
                 JOIN cliente cl ON us.idusuario = cl.idusuario
                 WHERE us.idusuario = :idusuario
@@ -50,7 +55,11 @@ class Cliente
             $resultado->bindParam(":idusuario", $idusuario);
             $resultado->execute();
             $cliente = $resultado->fetchObject();
-
+            // var_dump($cliente->imc, 'fd'); exit();
+            $cliente->imc = $cliente->imc ?? '[ - ]';
+            $cliente->peso = $cliente->peso ?? '[ - ]';
+            $cliente->estatura = $cliente->estatura ?? '[ - ]';
+            $cliente->tipo_sangre = $cliente->tipo_sangre ?? '[ - ]';
             return $response->withJson([
                 'datos' => $cliente,
                 'flag' => 1,
@@ -58,7 +67,7 @@ class Cliente
             ]);
 
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "El token no es válido o ya no está disponible."
             ]);
@@ -84,6 +93,7 @@ class Cliente
                     fam.nombres,
                     fam.apellido_paterno,
                     fam.apellido_materno,
+                    CONCAT_WS(' ',fam.nombres,fam.apellido_paterno,fam.apellido_materno) AS nombre_completo,
                     fam.tipo_documento,
                     fam.numero_documento,
                     fam.correo,
@@ -124,7 +134,7 @@ class Cliente
 
 
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "Error al cargar los datos.",
                 'error' => $th
@@ -172,7 +182,7 @@ class Cliente
 
                 if ( !$validator->isValid() ) {
                     $errors = $validator->getErrors();
-                    return $response->withJson(['error' => true, 'message' => $errors]);
+                    return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
                 }
 
             $nombres            = $request->getParam('nombres');
@@ -242,7 +252,7 @@ class Cliente
 
 
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "Error al cargar los datos.",
                 'error' => $th
@@ -291,7 +301,7 @@ class Cliente
 
             if ( !$validator->isValid() ) {
                 $errors = $validator->getErrors();
-                return $response->withJson(['error' => true, 'message' => $errors]);
+                return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
             }
 
             $idcliente          = $request->getParam('idcliente');
@@ -345,7 +355,7 @@ class Cliente
 
 
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "Error al actualizar los datos.",
                 'error' => $th
@@ -392,7 +402,7 @@ class Cliente
 
 
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "Error al anular.",
                 'error' => $th
@@ -445,7 +455,7 @@ class Cliente
 
 
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "Error al cargar los datos.",
                 'error' => $th
@@ -485,22 +495,22 @@ class Cliente
 
             // VALIDACIONES
             $validator = $this->app->validator->validate($request, [
-                'nombres' => V::notBlank()->alnum(),
-                'apellido_paterno' => V::notBlank()->alnum(),
-                'apellido_materno' => V::notBlank()->alnum(),
+                // 'nombres' => V::notBlank()->alnum(),
+                // 'apellido_paterno' => V::notBlank()->alnum(),
+                // 'apellido_materno' => V::notBlank()->alnum(),
                 'correo' => V::notBlank()->email(),
-                'tipo_documento' => V::notBlank()->alpha(),
-                'numero_documento' => V::notBlank()->digit(),
-                'fecha_nacimiento' => V::date(),
+                // 'tipo_documento' => V::notBlank()->alpha(),
+                // 'numero_documento' => V::notBlank()->digit(),
+                // 'fecha_nacimiento' => V::date(),
                 'telefono' => V::digit(),
-                'sexo' => V::length(null,1)->regex('/[FM]/'),
-                'peso' => V::digit(),
-                'estatura' => V::digit(),
+                'tipo_sangre' => V::length(null,3),
+                'peso' => V::length(null,3),
+                'estatura' => V::length(null,3),
             ]);
 
             if ( !$validator->isValid() ) {
                 $errors = $validator->getErrors();
-                return $response->withJson(['error' => true, 'message' => $errors]);
+                return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
             }
 
             $nombres            = $request->getParam('nombres');
@@ -514,20 +524,34 @@ class Cliente
             $sexo               = $request->getParam('sexo');
             $peso               = $request->getParam('peso');
             $estatura           = $request->getParam('estatura');
-            $imc                = $request->getParam('imc');
+            $imc                = null;
+            if( !empty($request->getParam('peso')) && !empty($request->getParam('estatura')) ){
+                $imc = $request->getParam('peso') / (($request->getParam('estatura')/100) * ($request->getParam('estatura')/100));
+            }
+            
             $tipo_sangre        = $request->getParam('tipo_sangre');
             $updatedAt          = date('Y-m-d H:i:s');
 
-            $sql = "UPDATE cliente SET
-                nombres             = :nombres,
-                apellido_paterno    = :apellido_paterno,
-                apellido_materno    = :apellido_materno,
-                tipo_documento      = :tipo_documento,
-                numero_documento    = :numero_documento,
+            // $sql = "UPDATE cliente SET
+            //     nombres             = :nombres,
+            //     apellido_paterno    = :apellido_paterno,
+            //     apellido_materno    = :apellido_materno,
+            //     tipo_documento      = :tipo_documento,
+            //     numero_documento    = :numero_documento,
+            //     correo              = :correo,
+            //     fecha_nacimiento    = :fecha_nacimiento,
+            //     telefono            = :telefono,
+            //     sexo                = :sexo,
+            //     peso                = :peso,
+            //     estatura            = :estatura,
+            //     imc                 = :imc,
+            //     tipo_sangre         = :tipo_sangre,
+            //     updatedAt           = :updatedAt
+            //     WHERE idcliente = $idcliente
+            // ";
+            $sql = "UPDATE cliente SET 
                 correo              = :correo,
-                fecha_nacimiento    = :fecha_nacimiento,
                 telefono            = :telefono,
-                sexo                = :sexo,
                 peso                = :peso,
                 estatura            = :estatura,
                 imc                 = :imc,
@@ -537,15 +561,15 @@ class Cliente
             ";
 
             $resultado = $this->app->db->prepare($sql);
-            $resultado->bindParam(':nombres', $nombres);
-            $resultado->bindParam(':apellido_paterno', $apellido_paterno);
-            $resultado->bindParam(':apellido_materno', $apellido_materno);
-            $resultado->bindParam(':tipo_documento', $tipo_documento);
-            $resultado->bindParam(':numero_documento', $numero_documento);
+            // $resultado->bindParam(':nombres', $nombres);
+            // $resultado->bindParam(':apellido_paterno', $apellido_paterno);
+            // $resultado->bindParam(':apellido_materno', $apellido_materno);
+            // $resultado->bindParam(':tipo_documento', $tipo_documento);
+            // $resultado->bindParam(':numero_documento', $numero_documento);
             $resultado->bindParam(':correo', $correo);
-            $resultado->bindParam(':fecha_nacimiento', $fecha_nacimiento);
+            // $resultado->bindParam(':fecha_nacimiento', $fecha_nacimiento);
             $resultado->bindParam(':telefono',$telefono);
-            $resultado->bindParam(':sexo', $sexo);
+            // $resultado->bindParam(':sexo', $sexo);
             $resultado->bindParam(':peso', $peso);
             $resultado->bindParam(':estatura', $estatura);
             $resultado->bindParam(':imc', $imc);
@@ -560,7 +584,7 @@ class Cliente
 
 
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "Error al actualizar los datos.",
                 'error' => $th
@@ -606,7 +630,7 @@ class Cliente
                 ]);
             }
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "Error al subir la foto.",
                 'error' => $th
@@ -641,7 +665,7 @@ class Cliente
 
                 if ( !$validator->isValid() ) {
                     $errors = $validator->getErrors();
-                    return $response->withJson(['error' => true, 'message' => $errors]);
+                    return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
                 }
 
             $password  = password_hash($request->getParam('password_new'),PASSWORD_DEFAULT);
@@ -664,14 +688,14 @@ class Cliente
                     'message' => "Tu contraseña se actualizó exitosamente."
                 ]);
             } catch (PDOException $e) {
-                return $response->withJson([
+                return $response->withStatus(400)->withJson([
                     'flag' => 0,
                     'message' => "Ocurrió un error. Inténtelo nuevamente."
                 ]);
             }
 
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "Error al actualizar los datos.",
                 'error' => $th
@@ -760,7 +784,7 @@ class Cliente
 
 
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "Error al cargar los datos.",
                 'error' => $th
