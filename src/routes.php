@@ -70,5 +70,6 @@ $app->group('/api', function(\Slim\App $app) {
 
         $app->post('/cargar_medicos_por_especialidad', 'App\Routes\Cita:cargar_medicos_por_especialidad');
 
+        $app->post('/verifica_cliente', 'App\Routes\Cita:verifica_cliente');
     });
 });

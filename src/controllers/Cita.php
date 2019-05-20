@@ -54,9 +54,11 @@ class Cita
 
             $idcliente      = $request->getParam('idcliente');
             $idgarante      = $request->getParam('idgarante');
+            $idhorario      = $request->getParam('idhorario');
             $fecha_cita     = $request->getParam('fecha_cita');
             $hora_inicio    = $request->getParam('hora_inicio');
             $hora_fin       = $request->getParam('hora_fin');
+            $idmedico       = $request->getParam('idmedico');
             $medico         = $request->getParam('medico');
             $especialidad   = $request->getParam('especialidad');
             $fecha_registro = date('Y-m-d H:i:s');
@@ -91,6 +93,212 @@ class Cita
             $resultado->bindParam(':medico',$medico);
             $resultado->bindParam(':especialidad',$especialidad);
 
+            $resultado->execute();
+
+            // REGISTRO EN SQL SERVER
+            $sql = "
+                SELECT
+                    cl.idcliente,
+                    cl.nombres,
+                    cl.apellido_paterno,
+                    cl.apellido_materno,
+                    cl.tipo_documento,
+                    cl.numero_documento,
+                    cl.correo,
+                    cl.sexo,
+                    cl.telefono,
+                    cl.peso,
+                    cl.estatura,
+                    cl.tipo_sangre,
+                    cl.fecha_nacimiento
+                FROM cliente cl
+                WHERE cl.idcliente = :idcliente
+                LIMIT 1
+            ";
+
+            $resultado = $this->app->db->prepare($sql);
+            $resultado->bindParam(":idcliente", $idcliente);
+            $resultado->execute();
+            $cliente = $resultado->fetchObject();
+            $nombreCompleto = $cliente->apellido_paterno . ' ' . $cliente->apellido_materno . ' , ' . $cliente->nombres;
+
+        // REGISTRO EN SQL SERVER
+        // Verificacion si existe cliente
+            $sql = "SELECT TOP 1 Persona IdPaciente
+                    FROM PersonaMast cli
+                    WHERE ( cli.TipoDocumentoIdentidad ='D'
+                        AND cli.DocumentoIdentidad = '". $cliente->numero_documento ."' )
+                        OR ( cli.TipoDocumento ='D' AND cli.Documento = '". $cliente->numero_documento ."' )
+            ";
+            $resultado = $this->app->db_mssql->prepare($sql);
+            $resultado->execute();
+            $res = $resultado->fetchAll();
+            if( count($res) > 0 ){
+                $paciente = $res[0];
+                $IdPaciente = $paciente['IdPaciente'];
+            }else{
+                // Obtener el ultimo registro de PersonaMast
+                $sql = "SELECT max ( PersonaMast.Persona ) id FROM PersonaMast ";
+                $resultado = $this->app->db_mssql->prepare($sql);
+                $resultado->execute();
+                $res = $resultado->fetchAll();
+                $IdPaciente = (int)$res[0]['id'] + 1;
+
+                // Registro de PersonaMast
+                $sql = "INSERT INTO PersonaMast (
+                        Persona,
+                        Busqueda,
+                        TipoDocumentoIdentidad,
+                        DocumentoIdentidad,
+                        Origen,
+                        ApellidoPaterno,
+                        ApellidoMaterno,
+                        Nombres,
+                        NombreCompleto,
+                        FechaNacimiento,
+                        Sexo,
+                        EstadoCivil,
+                        EsPaciente,
+                        EsEmpresa,
+                        Estado,
+                        UltimoUsuario,
+                        UltimaFechaModif,
+                        IndicadorAutogenerado,
+                        TipoDocumento,
+                        Documento,
+                        TipoPersona
+                    ) VALUES (
+                        $IdPaciente,
+                        '".$nombreCompleto."',
+                        'D',
+                        '".$cliente->numero_documento."',
+                        'LIMA',
+                        '".$cliente->apellido_paterno."',
+                        '".$cliente->apellido_materno."',
+                        '".$cliente->nombres."',
+                        '".$nombreCompleto."',
+                        '".date('d-m-Y', strtotime($cliente->fecha_nacimiento))."',
+                        '".$cliente->sexo."',
+                        'S',
+                        'S',
+                        'N',
+                        'A',
+                        '',
+                        '" . date('d-m-Y H:i:s') ."',
+                        1,
+                        'D',
+                        '".$cliente->numero_documento."',
+                        'N'
+                    );
+                ";
+                $resultado = $this->app->db_mssql->prepare($sql);
+                $resultado->execute();
+
+                // Registro de SS_GE_Paciente
+                $sql = " INSERT INTO SS_GE_Paciente (
+                        IdPaciente,
+                        IndicadorNuevo,
+                        TipoAlmacenamiento,
+                        FechaIngreso,
+                        Estado,
+                        UsuarioCreacion,
+                        FechaCreacion,
+                        UsuarioModificacion,
+                        FechaModificacion
+                    )
+                    VALUES (
+                        $IdPaciente,
+                        2,
+                        'AC',
+                        '" . date('d-m-Y H:i:s') ."',
+                        2,
+                        'RCORTEZ',
+                        '" . date('d-m-Y H:i:s') ."',
+                        '',
+                        '" . date('d-m-Y H:i:s') ."'
+                    );
+                ";
+
+                $resultado = $this->app->db_mssql->prepare($sql);
+                $resultado->execute();
+            }
+
+            // REGISTRO DE CITA EN SQL SERVER
+            // Obtener el ultimo registro de SS_CC_Cita
+            $sql = "SELECT max ( SS_CC_Cita.IdCita ) id FROM SS_CC_Cita";
+            $resultado = $this->app->db_mssql->prepare($sql);
+            $resultado->execute();
+            $res = $resultado->fetchAll();
+            $IdCita = (int)$res[0]['id'] + 1;
+            // Registro de SS_CC_Cita
+            $sql = "INSERT INTO SS_CC_Cita(
+                IdCita,
+                IdHorario,
+                FechaCita,
+                FechaLlegada,
+                IndicadorExcedente,
+                IndicadorHistoriaClinica,
+                DuracionPromedio,
+                DuracionReal,
+                TipoCita,
+                IdPaciente,
+                IndicadorInasistencia,
+                IndicadorReemplazo,
+                EstadoDocumento,
+                EstadoDocumentoAnterior,
+                Estado,
+                UsuarioCreacion,
+                FechaCreacion,
+                UsuarioModificacion,
+                FechaModificacion,
+                IndicadorRegistroCompartido,
+                IdTipoAtencion,
+                IdGrupoAtencion,
+                IdServicio,
+                IdMedico,
+                FechaCitaFecha,
+                TipoPaciente,
+                TipoCoberturaAtencion,
+                IndicadorWeb,
+                EstadoDocumentoPrograma  )
+            VALUES(
+                $IdCita,
+                $idhorario,
+                '$fecha_cita',
+                '$fecha_cita',
+                1,
+                1,
+                $duracionCita,
+                $duracionCita,
+                1,
+                $IdPaciente,
+                1,
+                1,
+                2,
+                0,
+                2,
+                '',
+                '" . date('d-m-Y H:i:s') ."',
+                'RCORTEZ',
+                '" . date('d-m-Y H:i:s') ."',
+                1,
+                1,
+                1,
+                1,
+                $idmedico,
+                '$fecha_cita',
+                NULL,
+                NULL,
+                1,
+                NULL);
+            ");
+            $resultado = $this->app->db_mssql->prepare($sql);
+            $resultado->execute();
+
+            // Registro de Cita Control
+            $sql = " INSERT INTO SS_CC_CitaControl VALUES($IdCita,1,'" . date('d-m-Y H:i:s') ."',NULL,'',2,0,1,NULL,2,'','" . date('d-m-Y H:i:s') ."','','" . date('d-m-Y H:i:s') ."';
+            ";
+            $resultado = $this->app->db_mssql->prepare($sql);
             $resultado->execute();
 
             return $response->withJson([
@@ -372,6 +580,143 @@ class Cita
                 'message' => 'Ocurrió un error al cargar los medicos'
             ]);
         }
+
+    }
+
+    public function verifica_cliente(Request $request, Response $response, array $args)
+    {
+        $idcliente      = $request->getParam('idcliente');
+
+        $sql = "
+                SELECT
+                    cl.idcliente,
+                    cl.nombres,
+                    cl.apellido_paterno,
+                    cl.apellido_materno,
+                    cl.tipo_documento,
+                    cl.numero_documento,
+                    cl.correo,
+                    cl.sexo,
+                    cl.telefono,
+                    cl.peso,
+                    cl.estatura,
+                    cl.tipo_sangre,
+                    cl.fecha_nacimiento
+                FROM cliente cl
+                WHERE cl.idcliente = :idcliente
+                LIMIT 1
+            ";
+
+            $resultado = $this->app->db->prepare($sql);
+            $resultado->bindParam(":idcliente", $idcliente);
+            $resultado->execute();
+            $cliente = $resultado->fetchObject();
+            $nombreCompleto = $cliente->apellido_paterno . ' ' . $cliente->apellido_materno . ' , ' . $cliente->nombres;
+
+        // Verificacion si existe cliente
+            $sql = "SELECT TOP 1 Persona IdPaciente
+                    FROM PersonaMast cli
+                    WHERE ( cli.TipoDocumentoIdentidad ='D'
+                        AND cli.DocumentoIdentidad = '". $cliente->numero_documento ."' )
+                        OR ( cli.TipoDocumento ='D' AND cli.Documento = '". $cliente->numero_documento ."' )
+            ";
+            $resultado = $this->app->db_mssql->prepare($sql);
+            $resultado->execute();
+            $res = $resultado->fetchAll();
+            if( count($res) > 0 ){
+                $paciente = $res[0];
+                $IdPaciente = $paciente['IdPaciente'];
+            }else{
+                // Obtener el ultimo registro de PersonaMast
+                $sql = "SELECT max ( PersonaMast.Persona ) id FROM PersonaMast ";
+                $resultado = $this->app->db_mssql->prepare($sql);
+                $resultado->execute();
+                $res = $resultado->fetchAll();
+                $IdPaciente = (int)$res[0]['id'] + 1;
+
+                // Registro de PersonaMast
+                $sql = "INSERT INTO PersonaMast (
+                        Persona,
+                        Busqueda,
+                        TipoDocumentoIdentidad,
+                        DocumentoIdentidad,
+                        Origen,
+                        ApellidoPaterno,
+                        ApellidoMaterno,
+                        Nombres,
+                        NombreCompleto,
+                        FechaNacimiento,
+                        Sexo,
+                        EstadoCivil,
+                        EsPaciente,
+                        EsEmpresa,
+                        Estado,
+                        UltimoUsuario,
+                        UltimaFechaModif,
+                        IndicadorAutogenerado,
+                        TipoDocumento,
+                        Documento,
+                        TipoPersona
+                    ) VALUES (
+                        $IdPaciente,
+                        '".$nombreCompleto."',
+                        'D',
+                        '".$cliente->numero_documento."',
+                        'LIMA',
+                        '".$cliente->apellido_paterno."',
+                        '".$cliente->apellido_materno."',
+                        '".$cliente->nombres."',
+                        '".$nombreCompleto."',
+                        '".date('d-m-Y', strtotime($cliente->fecha_nacimiento))."',
+                        '".$cliente->sexo."',
+                        'S',
+                        'S',
+                        'N',
+                        'A',
+                        '',
+                        '" . date('d-m-Y H:i:s') ."',
+                        1,
+                        'D',
+                        '".$cliente->numero_documento."',
+                        'N'
+                    );
+                ";
+                $resultado = $this->app->db_mssql->prepare($sql);
+                $resultado->execute();
+
+                // Registro de SS_GE_Paciente
+                $sql = " INSERT INTO SS_GE_Paciente (
+                        IdPaciente,
+                        IndicadorNuevo,
+                        TipoAlmacenamiento,
+                        FechaIngreso,
+                        Estado,
+                        UsuarioCreacion,
+                        FechaCreacion,
+                        UsuarioModificacion,
+                        FechaModificacion
+                    )
+                    VALUES (
+                        $IdPaciente,
+                        2,
+                        'AC',
+                        '" . date('d-m-Y H:i:s') ."',
+                        2,
+                        'RCORTEZ',
+                        '" . date('d-m-Y H:i:s') ."',
+                        '',
+                        '" . date('d-m-Y H:i:s') ."'
+                    );
+                ";
+
+                $resultado = $this->app->db_mssql->prepare($sql);
+                $resultado->execute();
+            }
+
+             return $response->withJson([
+                'datos' => $IdPaciente
+
+            ]);
 
     }
 }
