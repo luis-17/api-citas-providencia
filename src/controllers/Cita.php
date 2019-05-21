@@ -22,6 +22,7 @@ class Cita
 	 * "fecha_cita" : "2019-04-15",
 	 * "hora_inicio" : "08:00",
 	 * "hora_fin" : "08:10",
+     * "idmedico" : 1234, // id del medico proveniente del sql server
 	 * "medico" : "LEOPOLDO DANTE",
 	 * "especialidad" : "NUTRICION"
      *
@@ -279,7 +280,7 @@ class Cita
                 2,
                 '',
                 '" . date('d-m-Y H:i:s') ."',
-                'RCORTEZ',
+                '',
                 '" . date('d-m-Y H:i:s') ."',
                 1,
                 1,
@@ -743,6 +744,196 @@ class Cita
             return $response->withJson([
                 'flag' => 0,
                 'message' => "El token no es válido o ya no está disponible."
+            ]);
+        }
+    }
+    /**
+     * Carga las fechas programadas segun dia, especialidad y medico elegido
+     *
+     * JSON
+     * "periodo" : "201905",
+     * "idespecialidad" : 18,
+     * "idmedico" : 64584
+     *
+     * Creado: 19-05-2019
+     * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+     * @param Request $request
+     * @param Response $response
+     * @return void
+     */
+    public function cargar_fechas_programadas(Request $request, Response $response, array $args)
+    {
+        try {
+            $user = $request->getAttribute('decoded_token_data');
+
+            $idusuario = $user->idusuario;
+
+            // VALIDACIONES
+                $validator = $this->app->validator->validate($request, [
+                    'periodo'           => V::notBlank()->digit(),
+                    'idespecialidad'    => V::notBlank()->digit(),
+                    'idmedico'    => V::notBlank()->digit()
+                ]);
+
+                if ( !$validator->isValid() ) {
+                    $errors = $validator->getErrors();
+                    return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
+                }
+
+            $periodo        = $request->getParam('periodo');
+            $idespecialidad = $request->getParam('idespecialidad');
+            $idmedico       = $request->getParam('idmedico');
+
+            $sql = "SELECT DISTINCT
+                    hor.FechaInicio
+                FROM SS_CC_Horario hor
+                LEFT JOIN SS_GE_Servicio serv ON hor.IdServicio = serv.IdServicio
+                LEFT JOIN SS_GE_GrupoConsultorio gc ON gc.IdConsultorio = hor.IdConsultorio
+                WHERE hor.Periodo = " . $periodo . "
+                AND hor.Medico = " . $idmedico . "
+
+                AND hor.Estado = 2
+                AND hor.IdEspecialidad = " . $idespecialidad . "
+                AND hor.IdTurno IN (1,2)
+                AND (
+                        ( hor.IdEspecialidad = " . $idespecialidad . " AND
+                        gc.IdGrupoAtencion = 1 AND
+                        serv.IdServicio = 1
+                        ) OR
+                        ( hor.IndicadorCompartido = 2 AND
+                        hor.IdGrupoAtencionCompartido = 1 AND
+                        hor.IdEspecialidad = " . $idespecialidad . "
+                        )
+                    )
+                ORDER BY hor.FechaInicio
+
+            ";
+
+            $resultado = $this->app->db_mssql->prepare($sql);
+            // $resultado->bindParam(':periodo', $periodo);
+            // $resultado->bindParam(':idespecialidad', $idespecialidad);
+
+            $resultado->execute();
+            if ($lista = $resultado->fetchAll()) {
+                $message = "Se encontraron fechas programadas";
+                $flag = 1;
+            }else{
+                $message = "No tiene fechas programadas";
+                $flag = 0;
+            }
+			$data = array();
+            foreach ($lista as $row) {
+                $data[] = date('d-m-Y',strtotime($row['FechaInicio']));
+
+            }
+            return $response->withJson([
+                'datos' => $data,
+                'flag' => $flag,
+                'message' => $message
+            ]);
+
+        } catch (\Exception $th) {
+            return $response->withJson([
+                'flag' => 0,
+                'message' => 'Ocurrió un error al cargar los datos'
+            ]);
+        }
+    }
+    /**
+     * Carga los cupos de una fecha según médico y especialidad elegida
+     *
+     * JSON
+     * "fecha" : "2019-05-10",
+     * "idespecialidad" : 18,
+     * "idmedico" : 64584
+     *
+     * Creado: 20-05-2019
+     * @author Ing. Ruben Guevara <rguevarac@hotmail.es>
+     * @param Request $request
+     * @param Response $response
+     * @return void
+     */
+    public function cargar_horario(Request $request, Response $response, array $args)
+    {
+        try {
+            $user = $request->getAttribute('decoded_token_data');
+
+            $idusuario = $user->idusuario;
+
+            // VALIDACIONES
+                $validator = $this->app->validator->validate($request, [
+                    'fecha'    => V::notBlank(),
+                    'idespecialidad'    => V::notBlank()->digit(),
+                    'idmedico'    => V::notBlank()->digit()
+                ]);
+
+                if ( !$validator->isValid() ) {
+                    $errors = $validator->getErrors();
+                    return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
+                }
+
+            $fecha          = $request->getParam('fecha');
+            $idespecialidad = $request->getParam('idespecialidad');
+            $idmedico       = $request->getParam('idmedico');
+
+            $sql = "SELECT
+                    hor.IdHorario,
+                    CAST(hor.HoraInicio AS TIME) AS InicioHorario,
+                    CAST(hor.HoraFin AS TIME) AS FinHorario,
+                    hor.TiempoPromedioAtencion AS Intervalo
+                FROM SS_CC_Horario hor
+                WHERE hor.FechaInicio = '" . date('d-m-Y',strtotime($fecha)). "'
+                AND hor.Medico = " . $idmedico . "
+
+                AND hor.Estado = 2
+                AND hor.IdEspecialidad = " . $idespecialidad . "
+                AND hor.IdTurno IN (1,2)
+                ORDER BY hor.HoraInicio
+
+            ";
+
+            $resultado = $this->app->db_mssql->prepare($sql);
+            // $resultado->bindParam(':periodo', $periodo);
+            // $resultado->bindParam(':idespecialidad', $idespecialidad);
+
+            $resultado->execute();
+            if ($lista = $resultado->fetchAll()) {
+                $message = "Se encontraron fechas programadas";
+                $flag = 1;
+            }else{
+                $message = "No tiene fechas programadas";
+                $flag = 0;
+            }
+			$data = array();
+			$arrCitas = array();
+            foreach ($lista as $row) {
+                $hora_inicio = $row['InicioHorario'];
+
+                $i = 1;
+                while ( strtotime($row['FinHorario']) > strtotime($hora_inicio) ) {
+                    $hora_fin = date('H:i',(strtotime($hora_inicio) + $row['Intervalo']*60) );
+                    array_push($arrCitas,
+                        array(
+                            'idhorario' => $row['IdHorario'],
+                            'numero_cupo' => $i++,
+                            'hora_inicio' => $hora_inicio,
+                            'hora_fin' => $hora_fin
+                        )
+                    );
+                    $hora_inicio = $hora_fin;
+                }
+
+            }
+            return $response->withJson([
+                'datos' => $arrCitas,
+                'flag' => $flag,
+                'message' => $message
+            ]);
+
+        } catch (\Exception $th) {
+            return $response->withJson([
+                'flag' => 0,
+                'message' => 'Ocurrió un error al cargar los datos'
             ]);
         }
     }

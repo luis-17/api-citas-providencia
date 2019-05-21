@@ -21,7 +21,7 @@ $app->get('/[{name}]', function (Request $request, Response $response, array $ar
 //     $app->view()->appendData(array('baseFile' => '/uploads'));
 // });
 $app->group('/api', function(\Slim\App $app) {
-    
+
     $app->post('/login', 'App\Routes\Acceso:login');
 
     $app->post('/registro', 'App\Routes\Acceso:registro');
@@ -72,6 +72,8 @@ $app->group('/api', function(\Slim\App $app) {
 
         $app->post('/cargar_medicos_por_especialidad', 'App\Routes\Cita:cargar_medicos_por_especialidad');
 
-        $app->post('/verifica_cliente', 'App\Routes\Cita:verifica_cliente');
+        $app->post('/cargar_fechas_programadas', 'App\Routes\Cita:cargar_fechas_programadas');
+
+        $app->post('/cargar_horario', 'App\Routes\Cita:cargar_horario');
     });
 });
