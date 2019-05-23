@@ -18,10 +18,12 @@ class Cita
      * Registra una cita mandando por json lo siguiente
      * "idcliente" : 1, // id del cliente que se va a atender
      * "idgarante" : 2,
+     * "idhorario" : 97030, // id del horario de sql server que debe estar en el turno selecc
 	 * "fecha_registro" : "2019-04-08",
 	 * "fecha_cita" : "2019-04-15",
 	 * "hora_inicio" : "08:00",
-	 * "hora_fin" : "08:10",
+	 * "hora_fin" : "08:15",
+	 * "duracionCita" : "15",
      * "idmedico" : 1234, // id del medico proveniente del sql server
 	 * "medico" : "LEOPOLDO DANTE",
 	 * "especialidad" : "NUTRICION"
@@ -59,6 +61,7 @@ class Cita
             $fecha_cita     = $request->getParam('fecha_cita');
             $hora_inicio    = $request->getParam('hora_inicio');
             $hora_fin       = $request->getParam('hora_fin');
+            $duracionCita   = $request->getParam('duracionCita');
             $idmedico       = $request->getParam('idmedico');
             $medico         = $request->getParam('medico');
             $especialidad   = $request->getParam('especialidad');
@@ -231,6 +234,7 @@ class Cita
             $resultado->execute();
             $res = $resultado->fetchAll();
             $IdCita = (int)$res[0]['id'] + 1;
+            $fecha_cita = $fecha_cita . ' ' . $hora_inicio;
             // Registro de SS_CC_Cita
             $sql = "INSERT INTO SS_CC_Cita(
                 IdCita,
@@ -297,7 +301,21 @@ class Cita
             $resultado->execute();
 
             // Registro de Cita Control
-            $sql = " INSERT INTO SS_CC_CitaControl VALUES($IdCita,1,'" . date('d-m-Y H:i:s') ."',NULL,'',2,0,1,NULL,2,'','" . date('d-m-Y H:i:s') ."','','" . date('d-m-Y H:i:s') ."';
+            $sql = "INSERT INTO SS_CC_CitaControl
+            VALUES(
+                $IdCita,
+                1,
+                '" . date('d-m-Y H:i:s') ."',
+                NULL,
+                '',
+                2,
+                0,
+                1,
+                NULL,
+                2,
+                '','" . date('d-m-Y H:i:s') ."',
+                '','" . date('d-m-Y H:i:s') ."'
+                )
             ";
             $resultado = $this->app->db_mssql->prepare($sql);
             $resultado->execute();
@@ -650,7 +668,7 @@ class Cita
                         cl.apellido_paterno,
                         cl.apellido_materno,
                         'TITULAR' AS parentesco,
-                        UPPER(MONTHNAME(cit.fecha_cita)) AS mes, 
+                        UPPER(MONTHNAME(cit.fecha_cita)) AS mes,
                         DAY(cit.fecha_cita) AS dia
                     FROM usuario AS us
                     JOIN cliente cl ON us.idusuario = cl.idusuario
@@ -671,7 +689,7 @@ class Cita
                         fam.apellido_paterno,
                         fam.apellido_materno,
                         par.descripcion_par AS parentesco,
-                        UPPER(MONTHNAME(cit.fecha_cita)) AS mes, 
+                        UPPER(MONTHNAME(cit.fecha_cita)) AS mes,
                         DAY(cit.fecha_cita) AS dia
                     FROM usuario AS us
                     JOIN cliente cl ON us.idusuario = cl.idusuario
@@ -737,7 +755,7 @@ class Cita
                         cl.apellido_paterno,
                         cl.apellido_materno,
                         'TITULAR' AS parentesco,
-                        UPPER(MONTHNAME(cit.fecha_cita)) AS mes, 
+                        UPPER(MONTHNAME(cit.fecha_cita)) AS mes,
                         DAY(cit.fecha_cita) AS dia
                     FROM usuario AS us
                     JOIN cliente cl ON us.idusuario = cl.idusuario
@@ -758,7 +776,7 @@ class Cita
                         fam.apellido_paterno,
                         fam.apellido_materno,
                         par.descripcion_par AS parentesco,
-                        UPPER(MONTHNAME(cit.fecha_cita)) AS mes, 
+                        UPPER(MONTHNAME(cit.fecha_cita)) AS mes,
                         DAY(cit.fecha_cita) AS dia
                     FROM usuario AS us
                     JOIN cliente cl ON us.idusuario = cl.idusuario
