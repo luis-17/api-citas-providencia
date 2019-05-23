@@ -36,37 +36,39 @@ $app->group('/api', function(\Slim\App $app) {
 
 
     $app->group('/platform', function(\Slim\App $app) {
-        $app->get('/cargar_perfil_general', 'App\Routes\Cliente:cargar_perfil_general');
+        $app->get('/cargar_perfil_general', 'App\Routes\Cliente:cargar_perfil_general'); // ok
 
-        $app->get('/cargar_familiares', 'App\Routes\Cliente:cargar_familiares');
+        $app->get('/cargar_familiares', 'App\Routes\Cliente:cargar_familiares'); // ok
 
-        $app->post('/agregar_familiar', 'App\Routes\Cliente:agregar_familiar');
+        $app->post('/agregar_familiar', 'App\Routes\Cliente:agregar_familiar'); // ok
 
-        $app->post('/editar_familiar', 'App\Routes\Cliente:editar_familiar');
+        $app->post('/editar_familiar', 'App\Routes\Cliente:editar_familiar'); // ok
 
-        $app->post('/anular_familiar', 'App\Routes\Cliente:anular_familiar');
+        $app->post('/anular_familiar', 'App\Routes\Cliente:anular_familiar'); // ok
 
-        $app->get('/cargar_parentesco', 'App\Routes\Cliente:cargar_parentesco');
+        $app->get('/cargar_parentesco', 'App\Routes\Cliente:cargar_parentesco'); // ok
 
-        $app->post('/editar_perfil', 'App\Routes\Cliente:editar_perfil');
+        $app->post('/editar_perfil', 'App\Routes\Cliente:editar_perfil'); // ok
 
-        $app->post('/subir_foto', 'App\Routes\Cliente:subir_foto');
+        $app->post('/subir_foto', 'App\Routes\Cliente:subir_foto'); // ok
 
-        $app->post('/cambiar_password', 'App\Routes\Cliente:cambiar_password');
+        $app->post('/cambiar_password', 'App\Routes\Cliente:cambiar_password'); // ok
 
-        $app->get('/cargar_paciente', 'App\Routes\Cliente:cargar_paciente');
+        $app->get('/cargar_paciente', 'App\Routes\Cliente:cargar_paciente'); // ok
 
         $app->get('/cargar_garante', 'App\Routes\Garante:cargar_garante');
 
         $app->post('/registrar_cita', 'App\Routes\Cita:registrar_cita');
 
+        $app->post('/anular_cita', 'App\Routes\Cita:anular_cita'); // ok
+
         $app->post('/crear_token_culqi', 'App\Routes\Cita:crear_token_culqi');
 
         $app->post('/registrar_pago', 'App\Routes\Cita:registrar_pago');
 
-        $app->get('/cargar_citas_pendientes', 'App\Routes\Cita:cargar_citas_pendientes');
+        $app->get('/cargar_citas_pendientes', 'App\Routes\Cita:cargar_citas_pendientes'); // ok
 
-        $app->get('/cargar_citas_realizadas', 'App\Routes\Cita:cargar_citas_realizadas');
+        $app->get('/cargar_citas_realizadas', 'App\Routes\Cita:cargar_citas_realizadas'); // ok
 
         $app->get('/cargar_especialidades', 'App\Routes\Cita:cargar_especialidades');
 

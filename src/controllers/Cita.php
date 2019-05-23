@@ -215,6 +215,44 @@ class Cita
             ]);
         }
     }
+
+    /**
+     * Anula la cita seleccionada
+     *
+     * Creado: 08-05-2019
+     * @author Ing. Luis Luna <luisls1717@gmail.com>
+     * @param Request $request
+     * @param Response $response
+     * @return void
+     */
+    public function anular_cita(Request $request, Response $response)
+    {
+        try {
+            $idcita  = $request->getParam('idcita');
+            $fechaAnulacion  = date('Y-m-d H:i:s');
+
+            $sql = "UPDATE cita SET
+                estado_cita = 0,
+                fecha_anulacion  = :fechaAnulacion
+                WHERE idcita = $idcita
+            ";
+
+            $resultado = $this->app->db->prepare($sql);
+            $resultado->bindParam(':fechaAnulacion', $fechaAnulacion);
+            $resultado->execute();
+
+            return $response->withJson([
+                'flag' => 1,
+                'message' => "Se anuló la cita correctamente."
+            ]);
+        } catch (\Exception $th) {
+            return $response->withStatus(400)->withJson([
+                'flag' => 0,
+                'message' => "Error al anular.",
+                'error' => $th
+            ]);
+        }
+    }
     /**
      * Carga las especialidades para seleccionar
      *
@@ -402,7 +440,9 @@ class Cita
                         cl.nombres,
                         cl.apellido_paterno,
                         cl.apellido_materno,
-                        'TITULAR' AS parentesco
+                        'TITULAR' AS parentesco,
+                        UPPER(MONTHNAME(cit.fecha_cita)) AS mes, 
+                        DAY(cit.fecha_cita) AS dia
                     FROM usuario AS us
                     JOIN cliente cl ON us.idusuario = cl.idusuario
                     JOIN cita cit ON cl.idcliente = cit.idcliente
@@ -421,7 +461,9 @@ class Cita
                         fam.nombres,
                         fam.apellido_paterno,
                         fam.apellido_materno,
-                        par.descripcion_par AS parentesco
+                        par.descripcion_par AS parentesco,
+                        UPPER(MONTHNAME(cit.fecha_cita)) AS mes, 
+                        DAY(cit.fecha_cita) AS dia
                     FROM usuario AS us
                     JOIN cliente cl ON us.idusuario = cl.idusuario
                     JOIN cliente fam ON cl.idcliente = fam.idtitularcliente
@@ -450,6 +492,7 @@ class Cita
                 'message' => $message
             ]);
         } catch (\Exception $th) {
+            // var_dump($th);
             return $response->withJson([
                 'flag' => 0,
                 'message' => "El token no es válido o ya no está disponible."
@@ -484,7 +527,9 @@ class Cita
                         cl.nombres,
                         cl.apellido_paterno,
                         cl.apellido_materno,
-                        'TITULAR' AS parentesco
+                        'TITULAR' AS parentesco,
+                        UPPER(MONTHNAME(cit.fecha_cita)) AS mes, 
+                        DAY(cit.fecha_cita) AS dia
                     FROM usuario AS us
                     JOIN cliente cl ON us.idusuario = cl.idusuario
                     JOIN cita cit ON cl.idcliente = cit.idcliente
@@ -503,7 +548,9 @@ class Cita
                         fam.nombres,
                         fam.apellido_paterno,
                         fam.apellido_materno,
-                        par.descripcion_par AS parentesco
+                        par.descripcion_par AS parentesco,
+                        UPPER(MONTHNAME(cit.fecha_cita)) AS mes, 
+                        DAY(cit.fecha_cita) AS dia
                     FROM usuario AS us
                     JOIN cliente cl ON us.idusuario = cl.idusuario
                     JOIN cliente fam ON cl.idcliente = fam.idtitularcliente
