@@ -945,8 +945,12 @@ class Cita
                     hor.IdHorario,
                     CAST(hor.HoraInicio AS TIME) AS InicioHorario,
                     CAST(hor.HoraFin AS TIME) AS FinHorario,
-                    hor.TiempoPromedioAtencion AS Intervalo
+                    hor.TiempoPromedioAtencion AS Intervalo,
+                    ci.IdCita,
+                    ci.FechaCita,
+                    CAST(FechaInicio AS DATE) AS Fecha
                 FROM SS_CC_Horario hor
+                LEFT JOIN SS_CC_Cita ci ON hor.IdHorario = ci.IdHorario
                 WHERE hor.FechaInicio = '" . date('d-m-Y',strtotime($fecha)). "'
                 AND hor.Medico = " . $idmedico . "
 
@@ -958,37 +962,63 @@ class Cita
             ";
 
             $resultado = $this->app->db_mssql->prepare($sql);
-            // $resultado->bindParam(':periodo', $periodo);
-            // $resultado->bindParam(':idespecialidad', $idespecialidad);
-
             $resultado->execute();
             if ($lista = $resultado->fetchAll()) {
                 $message = "Se encontraron fechas programadas";
                 $flag = 1;
+                $arrListado = array();
+                foreach ($lista as $key => $row) {
+                    $arrListado[$row['IdHorario']] = array(
+                        'IdHorario' => $row['IdHorario'],
+                        'InicioHorario' => $row['InicioHorario'],
+                        'FinHorario' => $row['FinHorario'],
+                        'Intervalo' => $row['Intervalo'],
+                        'Fecha' => $row['Fecha'],
+                        'turnos_ocupados' => array()
+                    );
+                }
+
+                foreach ($arrListado as $key => $value) {
+                    foreach ($lista as $row) {
+                        if( $row['IdHorario'] == $key ){
+                            $arrAux[] = date('Y-m-d H:i',strtotime($row['FechaCita']));
+                        }
+                    }
+                    $arrListado[$key]['turnos_ocupados'] = $arrAux;
+                }
+
+                $arrListado = array_values($arrListado);
             }else{
                 $message = "No tiene fechas programadas";
                 $flag = 0;
             }
 			$data = array();
-			$arrCitas = array();
-            foreach ($lista as $row) {
-                $hora_inicio = $row['InicioHorario'];
+            $arrCitas = array();
 
+            foreach ($arrListado as $row) {
+                $hora_inicio = date('H:i',strtotime($row['InicioHorario']));
                 $i = 1;
                 while ( strtotime($row['FinHorario']) > strtotime($hora_inicio) ) {
                     $hora_fin = date('H:i',(strtotime($hora_inicio) + $row['Intervalo']*60) );
-                    array_push($arrCitas,
+                    $fecha_inicio = $row['Fecha'] . ' ' . $hora_inicio;
+                    if( !in_array($fecha_inicio, $row['turnos_ocupados']) ){
+
+                        array_push($arrCitas,
                         array(
                             'idhorario' => $row['IdHorario'],
-                            'numero_cupo' => $i++,
+                            'numero_cupo' => $i,
                             'hora_inicio' => $hora_inicio,
                             'hora_fin' => $hora_fin
-                        )
-                    );
+                            )
+                        );
+                    }
+
                     $hora_inicio = $hora_fin;
+                    $i++;
                 }
 
             }
+
             return $response->withJson([
                 'datos' => $arrCitas,
                 'flag' => $flag,
