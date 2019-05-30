@@ -28,13 +28,11 @@ $container['db'] = function ($c) {
     return $pdo;
 };
 
-// PDO database library SQL SERVER
 $container['db_mssql'] = function ($c) {
     $settings = $c->get('settings')['db_mssql'];
-    $pdo = new PDO("odbc:Driver={SQL Server};Server=" . $settings['host'] . "; Database=" . $settings['dbname'],
-        $settings['user'], $settings['pass']);
-    // $pdo = new PDO("sqlsrv:Server=" . $settings['host'] . "; Database=" . $settings['dbname'],
-    //     $settings['user'], $settings['pass']);
+    // $pdo = new PDO("odbc:Driver={SQL Server};Server=" . $settings['host'] . "; Database=" . $settings['dbname'], $settings['user'], $settings['pass']);
+    // $pdo = new PDO("sqlsrv:Server=" . $settings['host'] . "; Database=" . $settings['dbname'],$settings['user'], $settings['pass']);
+    $pdo = new PDO($settings['cadenaConexion'],$settings['user'], $settings['pass']);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     return $pdo;

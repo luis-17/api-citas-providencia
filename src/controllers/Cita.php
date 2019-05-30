@@ -507,7 +507,6 @@ class Cita
                 WHERE
                     esp.Estado = 2
             ";
-
             $resultado = $this->app->db_mssql->prepare($sql);
             $resultado->execute();
             if ($lista = $resultado->fetchAll()) {
@@ -536,9 +535,10 @@ class Cita
             ]);
 
         } catch (\Exception $th) {
+            // var_dump($th->getMessage(), 'errorrr');
             return $response->withJson([
                 'flag' => 0,
-                'message' => $th
+                'message' => $th->getMessage()
             ]);
         }
 
