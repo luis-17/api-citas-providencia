@@ -506,6 +506,7 @@ class Cita
                     SS_GE_Especialidad esp
                 WHERE
                     esp.Estado = 2
+                ORDER BY esp.Descripcion ASC
             ";
             $resultado = $this->app->db_mssql->prepare($sql);
             $resultado->execute();
@@ -561,7 +562,7 @@ class Cita
 
             // VALIDACIONES
                 $validator = $this->app->validator->validate($request, [
-                    'periodo'           => V::notBlank()->digit(),
+                    'periodo'           => V::notBlank()->digit(), // 
                     'idespecialidad'    => V::notBlank()->digit()
                 ]);
 
