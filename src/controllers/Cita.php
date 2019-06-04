@@ -601,7 +601,7 @@ class Cita
 								hor.IdEspecialidad = " . $idespecialidad . "
 							)
 						)
-
+                    ORDER BY NombreCompleto ASC
             ";
 
             $resultado = $this->app->db_mssql->prepare($sql);
@@ -626,14 +626,22 @@ class Cita
                     )
                 );
             }
-            return $response->withJson([
+            if($flag === 1){
+                return $response->withJson([
+                    'datos' => $data,
+                    'flag' => $flag,
+                    'message' => $message
+                ]);
+            }
+            
+            return $response->withStatus(400)->withJson([
                 'datos' => $data,
                 'flag' => $flag,
                 'message' => $message
             ]);
 
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => 'Ocurrió un error al cargar los medicos'
             ]);
@@ -826,6 +834,11 @@ class Cita
      * @param Request $request
      * @param Response $response
      * @return void
+     * Modificado: 02-06-2019
+     * @author Ing. Ricardo Luna <luisls1717@gmail.com>
+     * @param Request $request
+     * @param Response $response
+     * @return void
      */
     public function cargar_fechas_programadas(Request $request, Response $response, array $args)
     {
@@ -835,16 +848,16 @@ class Cita
             $idusuario = $user->idusuario;
 
             // VALIDACIONES
-                $validator = $this->app->validator->validate($request, [
-                    'periodo'           => V::notBlank()->digit(),
-                    'idespecialidad'    => V::notBlank()->digit(),
-                    'idmedico'    => V::notBlank()->digit()
-                ]);
+            $validator = $this->app->validator->validate($request, [
+                'periodo'           => V::notBlank()->digit(),
+                'idespecialidad'    => V::notBlank()->digit(),
+                'idmedico'    => V::notBlank()->digit()
+            ]);
 
-                if ( !$validator->isValid() ) {
-                    $errors = $validator->getErrors();
-                    return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
-                }
+            if ( !$validator->isValid() ) {
+                $errors = $validator->getErrors();
+                return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
+            }
 
             $periodo        = $request->getParam('periodo');
             $idespecialidad = $request->getParam('idespecialidad');
@@ -887,13 +900,58 @@ class Cita
                 $message = "No tiene fechas programadas";
                 $flag = 0;
             }
-			$data = array();
-            foreach ($lista as $row) {
-                $data[] = date('d-m-Y',strtotime($row['FechaInicio']));
-
+            // generar fechas del mes
+            $anio = substr($periodo, 0, 4);
+            $mes = substr($periodo, 4, 2);
+            $desdeFecha = '01-'.$mes.'-'.$anio;
+            $hastaFecha = date("t-m-Y", strtotime($desdeFecha));
+            $fechasDelMes = $this->get_rango_fechas($desdeFecha,$hastaFecha,true);
+            $time_first_day_of_month = mktime(0, 0, 0, $mes, 1, $anio);
+            $week_day_first = date('N', $time_first_day_of_month);
+            $dataFinal = array();
+            $numFinal = 42;
+            $countExist = 0;
+            for ($i=0; $i <= $numFinal; ) { 
+                if( $i <= $week_day_first ){
+                    $dataFinal[] = array(
+                        'fecha' => null,
+                        'valid' => '-'
+                    );
+                }
+                if( $i > $week_day_first ){
+                    if(array_key_exists($countExist, $fechasDelMes)){
+                        $dataFinal[] = array(
+                            'fecha' => $fechasDelMes[$countExist],
+                            'valid' => 'no'
+                        );
+                    }else{
+                        $dataFinal[] = array(
+                            'fecha' => null,
+                            'valid' => '-'
+                        );
+                    }
+                    $countExist++;
+                }
+                
+                $i++;
             }
-            return $response->withJson([
-                'datos' => $data,
+            // generar fechas validas
+            foreach ($dataFinal as $key => $row) {
+                foreach ($lista as $rowLista) {
+                    if( $row['fecha'] == date('d-m-Y',strtotime($rowLista['FechaInicio'])) ){
+                        $dataFinal[$key]['valid'] = 'si';
+                    }
+                }
+            }
+            if ($flag === 1) {
+                return $response->withJson([
+                    'datos' => $dataFinal,
+                    'flag' => $flag,
+                    'message' => $message
+                ]);
+            }
+            return $response->withStatus(400)->withJson([
+                'datos' => $dataFinal,
                 'flag' => $flag,
                 'message' => $message
             ]);
@@ -1032,5 +1090,29 @@ class Cita
                 'message' => 'Ocurrió un error al cargar los datos'
             ]);
         }
+    }
+
+    private function get_rango_fechas($start, $end, $onlyDate = FALSE) {
+        $range = array();
+        if (is_string($start) === true) $start = strtotime($start);
+        if (is_string($end) === true ) $end = strtotime($end);
+        do {
+            if($onlyDate) {
+                $range[] = date('d-m-Y', $start);
+                $start = strtotime("+ 1 day", $start);
+            }else{
+                $range[] = date('d-m-Y H:i:s', $start);
+                $start = strtotime("+ 1 day", $start);
+            }
+            
+        } while($start <= $end);
+
+        if(count($range) < 1) {
+            if($onlyDate) 
+                { $range[] = date('d-m-Y'); }
+            else
+                { $range[] = date('d-m-Y H:i:s'); }
+        }
+        return $range;
     }
 }
