@@ -478,7 +478,7 @@ class Cita
                 IdCitaRelacionada = null,
                 UsuarioModificacion = 'BFERREYROS',
                 MotivoAnulacion = 'CANCELACION',
-                FechaModificacion = $fechaAnulacion
+                FechaModificacion = '" . date('d-m-Y H:i:s') ."'
             WHERE SS_CC_Cita.IdCita = $idcita
             ";
             $resultado = $this->app->db_mssql->prepare($ms_sql);
@@ -498,7 +498,7 @@ class Cita
             VALUES(
                 $idcita,
                 $secuencial,
-                $fechaAnulacion,
+                '" . date('d-m-Y H:i:s') ."',
                 NULL,
                 'BFERREYROS',
                 5,
@@ -507,9 +507,9 @@ class Cita
                 NULL,
                 2,
                 'BFERREYROS',
-                $fechaAnulacion,
+                '" . date('d-m-Y H:i:s') ."',
                 'BFERREYROS',
-                $fechaAnulacion
+                '" . date('d-m-Y H:i:s') ."'
 
             )";
             $resultado = $this->app->db_mssql->prepare($ms_sql);
