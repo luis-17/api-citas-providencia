@@ -610,10 +610,10 @@ class Cita
 
             $resultado->execute();
             if ($lista = $resultado->fetchAll()) {
-                $message = "Se encontraron citas realizadas";
+                $message = "Se encontraron médicos para la búsqueda";
                 $flag = 1;
             }else{
-                $message = "No tiene citas realizadas";
+                $message = "No se encontraron médicos para la busqueda; intente seleccionando otras fechas.";
                 $flag = 0;
             }
 			$data = array();
@@ -822,6 +822,81 @@ class Cita
         }
     }
     /**
+     * Carga las fechas en modo mock
+     *
+     * JSON
+     *
+     * Creado: 04-06-2019
+     * @author Ing. Ricardo Luna <luisls1717@gmail.com>
+     * @param Request $request
+     * @param Response $response
+     * @return void
+     */
+    public function cargar_fechas_mock(Request $request, Response $response)
+    {
+        // generar fechas del mes
+        $periodo = empty($request->getParam('periodo')) ? date('Ym') : $request->getParam('periodo');
+        // var_dump($periodo, 'asdd'); exit();
+        $anio = substr($periodo, 0, 4);
+        $mes = substr($periodo, 4, 2);
+        $desdeFecha = '01-'.$mes.'-'.$anio;
+        $hastaFecha = date("t-m-Y", strtotime($desdeFecha));
+        $fechasDelMes = $this->get_rango_fechas($desdeFecha,$hastaFecha,true);
+        $time_first_day_of_month = mktime(0, 0, 0, $mes, 1, $anio);
+        $week_day_first = date('N', $time_first_day_of_month);
+        // generar otros periodos
+        $periodoAnterior = date('Ym', strtotime("-1 month", strtotime($desdeFecha)));
+        $periodoSiguiente = date('Ym', strtotime("+1 month", strtotime($desdeFecha)));
+
+        $dataFinal = array();
+        $numFinal = 42;
+        $countExist = 0;
+        for ($i=1; $i <= $numFinal; ) { 
+            if( $i <= $week_day_first ){
+                $dataFinal[] = array(
+                    'fecha' => null,
+                    'dia' => null,
+                    'class' => '',
+                    'valid' => '-'
+                );
+            }
+            if( $i > $week_day_first ){
+                if(array_key_exists($countExist, $fechasDelMes)){
+                    $dataFinal[] = array(
+                        'fecha' => $fechasDelMes[$countExist],
+                        'dia' => date('d',strtotime($fechasDelMes[$countExist])),
+                        'class' => '',
+                        'valid' => 'no'
+                    );
+                }else{
+                    $dataFinal[] = array(
+                        'fecha' => null,
+                        'dia' => null,
+                        'class' => '',
+                        'valid' => '-'
+                    );
+                }
+                $countExist++;
+            }
+            
+            $i++;
+        }
+        // agrupar por semana
+        $dataGroupFinal = array_chunk($dataFinal, 7);
+        $mesSeleccionado = $this->convertir_mes(date('M',strtotime($desdeFecha)));
+
+        return $response->withJson([
+            'datos' => array(
+                'calendario'=> $dataGroupFinal,
+                'mes'=> $mesSeleccionado,
+                'periodoAnterior'=> $periodoAnterior,
+                'periodoSiguiente'=> $periodoSiguiente
+            ),
+            'flag' => 1,
+            'message' => ''
+        ]);
+    }
+    /**
      * Carga las fechas programadas segun dia, especialidad y medico elegido
      *
      * JSON
@@ -908,13 +983,19 @@ class Cita
             $fechasDelMes = $this->get_rango_fechas($desdeFecha,$hastaFecha,true);
             $time_first_day_of_month = mktime(0, 0, 0, $mes, 1, $anio);
             $week_day_first = date('N', $time_first_day_of_month);
+            // generar otros periodos
+            $periodoAnterior = date('Ym', strtotime("-1 month", strtotime($desdeFecha)));
+            $periodoSiguiente = date('Ym', strtotime("+1 month", strtotime($desdeFecha)));
+
             $dataFinal = array();
             $numFinal = 42;
             $countExist = 0;
-            for ($i=0; $i <= $numFinal; ) { 
+            for ($i=1; $i <= $numFinal; ) { 
                 if( $i <= $week_day_first ){
                     $dataFinal[] = array(
                         'fecha' => null,
+                        'dia' => null,
+                        'class' => '',
                         'valid' => '-'
                     );
                 }
@@ -922,11 +1003,15 @@ class Cita
                     if(array_key_exists($countExist, $fechasDelMes)){
                         $dataFinal[] = array(
                             'fecha' => $fechasDelMes[$countExist],
+                            'dia' => date('d',strtotime($fechasDelMes[$countExist])),
+                            'class' => '',
                             'valid' => 'no'
                         );
                     }else{
                         $dataFinal[] = array(
                             'fecha' => null,
+                            'dia' => null,
+                            'class' => '',
                             'valid' => '-'
                         );
                     }
@@ -940,22 +1025,24 @@ class Cita
                 foreach ($lista as $rowLista) {
                     if( $row['fecha'] == date('d-m-Y',strtotime($rowLista['FechaInicio'])) ){
                         $dataFinal[$key]['valid'] = 'si';
+                        $dataFinal[$key]['class'] = ' active';
                     }
                 }
             }
-            if ($flag === 1) {
-                return $response->withJson([
-                    'datos' => $dataFinal,
-                    'flag' => $flag,
-                    'message' => $message
-                ]);
-            }
-            return $response->withStatus(400)->withJson([
-                'datos' => $dataFinal,
+            // agrupar por semana
+            $dataGroupFinal = array_chunk($dataFinal, 7);
+            $mesSeleccionado = $this->convertir_mes(date('M',strtotime($desdeFecha)));
+
+            return $response->withJson([
+                'datos' => array(
+                    'calendario'=> $dataGroupFinal,
+                    'mes'=> $mesSeleccionado,
+                    'periodoAnterior'=> $periodoAnterior,
+                    'periodoSiguiente'=> $periodoSiguiente
+                ),
                 'flag' => $flag,
                 'message' => $message
             ]);
-
         } catch (\Exception $th) {
             return $response->withJson([
                 'flag' => 0,
@@ -1114,5 +1201,39 @@ class Cita
                 { $range[] = date('d-m-Y H:i:s'); }
         }
         return $range;
+    }
+    private function convertir_mes($mes) {
+        // if(strlen($nom_mes)==3){
+        //     $mes = date('M',strtotime($nom_mes));
+        //     $mes_num = NULL;
+        // }else{
+        //     $mes_num = $nom_mes;
+        //     $mes = NULL;
+        // }
+        if ($mes == 'Jan')
+        $resultado = 'ENERO';
+        if ($mes == 'Feb')
+        $resultado = 'FEBRERO';
+        if ($mes == 'Mar')
+        $resultado = 'MARZO';
+        if ($mes == 'Apr')
+        $resultado = 'ABRIL';
+        if ($mes == 'May')
+        $resultado = 'MAYO';
+        if ($mes == 'Jun')
+        $resultado = 'JUNIO';
+        if ($mes == 'Jul')
+        $resultado = 'JULIO';
+        if ($mes == 'Aug')
+        $resultado = 'AGOSTO';
+        if ($mes == 'Sep')
+        $resultado = 'SEPTIEMBRE';
+        if ($mes == 'Oct')
+        $resultado = 'OCTUBRE';
+        if ($mes == 'Nov')
+        $resultado = 'NOVIEMBRE';
+        if ($mes == 'Dec')
+        $resultado = 'DICIEMBRE';
+        return @$resultado;
     }
 }
