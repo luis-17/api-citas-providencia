@@ -234,7 +234,8 @@ class Cita
             $resultado->execute();
             $res = $resultado->fetchAll();
             $IdCita = (int)$res[0]['id'] + 1;
-            $fecha_cita = $fecha_cita . ' ' . $hora_inicio;
+            // $fecha_cita = $fecha_cita . ' ' . $hora_inicio;
+            $fecha_cita = date('d-m-Y', strtotime($fecha_cita)) . ' ' . $hora_inicio;
             // Registro de SS_CC_Cita
             $sql = "INSERT INTO SS_CC_Cita(
                 IdCita,
@@ -468,6 +469,52 @@ class Cita
             $resultado->bindParam(':fechaAnulacion', $fechaAnulacion);
             $resultado->execute();
 
+            /**Anulacion de cita en SQL Server */
+
+            $ms_sql = "UPDATE SS_CC_Cita
+            SET EstadoDocumento = 5,
+                EstadoDocumentoAnterior = 2,
+                Estado = 1,
+                IdCitaRelacionada = null,
+                UsuarioModificacion = 'BFERREYROS',
+                MotivoAnulacion = 'CANCELACION',
+                FechaModificacion = '" . date('d-m-Y H:i:s') ."'
+            WHERE SS_CC_Cita.IdCita = $idcita
+            ";
+            $resultado = $this->app->db_mssql->prepare($ms_sql);
+            $resultado->execute();
+
+            /**Registro cita_control */
+            $ms_sql = "SELECT MAX ( SS_CC_CitaControl.Secuencial ) AS secuencial
+            FROM SS_CC_CitaControl WITH ( NOLOCK )
+            WHERE SS_CC_CitaControl.IdDocumento = $idcita";
+
+            $resultado = $this->app->db_mssql->prepare($ms_sql);
+            $resultado->execute();
+            $res = $resultado->fetchAll();
+            $secuencial = (int)$res[0]['secuencial'] + 1;
+
+            $ms_sql = "INSERT INTO SS_CC_CitaControl
+            VALUES(
+                $idcita,
+                $secuencial,
+                '" . date('d-m-Y H:i:s') ."',
+                NULL,
+                'BFERREYROS',
+                5,
+                2,
+                1,
+                NULL,
+                2,
+                'BFERREYROS',
+                '" . date('d-m-Y H:i:s') ."',
+                'BFERREYROS',
+                '" . date('d-m-Y H:i:s') ."'
+
+            )";
+            $resultado = $this->app->db_mssql->prepare($ms_sql);
+            $resultado->execute();
+
             return $response->withJson([
                 'flag' => 1,
                 'message' => "Se anuló la cita correctamente."
@@ -562,7 +609,7 @@ class Cita
 
             // VALIDACIONES
                 $validator = $this->app->validator->validate($request, [
-                    'periodo'           => V::notBlank()->digit(), // 
+                    'periodo'           => V::notBlank()->digit(), //
                     'idespecialidad'    => V::notBlank()->digit()
                 ]);
 
@@ -633,7 +680,7 @@ class Cita
                     'message' => $message
                 ]);
             }
-            
+
             return $response->withStatus(400)->withJson([
                 'datos' => $data,
                 'flag' => $flag,
@@ -1017,7 +1064,7 @@ class Cita
                     }
                     $countExist++;
                 }
-                
+
                 $i++;
             }
             // generar fechas validas
@@ -1191,11 +1238,11 @@ class Cita
                 $range[] = date('d-m-Y H:i:s', $start);
                 $start = strtotime("+ 1 day", $start);
             }
-            
+
         } while($start <= $end);
 
         if(count($range) < 1) {
-            if($onlyDate) 
+            if($onlyDate)
                 { $range[] = date('d-m-Y'); }
             else
                 { $range[] = date('d-m-Y H:i:s'); }
