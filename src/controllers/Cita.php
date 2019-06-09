@@ -1182,7 +1182,7 @@ class Cita
 
                 $arrListado = array_values($arrListado);
             }else{
-                $message = "No tiene fechas programadas";
+                $message = "No se encontraron cupos disponibles en esta fecha.";
                 $flag = 0;
             }
 			$data = array();
