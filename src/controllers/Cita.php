@@ -44,9 +44,9 @@ class Cita
             // VALIDACIONES
                 $validator = $this->app->validator->validate($request, [
                     'idcliente'     => V::notBlank()->digit(),
-                    'idgarante'     => V::notBlank()->digit(),
+                    'idgarante'     => V::optional(V::digit()),
                     'especialidad'  => V::notBlank()->alnum(),
-                    'medico'        => V::notBlank()->alpha(),
+                    'medico'        => V::notBlank()->stringType(),
                     'fecha_cita'    => V::notBlank()->date(),
                 ]);
 
@@ -126,8 +126,8 @@ class Cita
             $cliente = $resultado->fetchObject();
             $nombreCompleto = $cliente->apellido_paterno . ' ' . $cliente->apellido_materno . ' , ' . $cliente->nombres;
 
-        // REGISTRO EN SQL SERVER
-        // Verificacion si existe cliente
+            // REGISTRO EN SQL SERVER
+            // Verificacion si existe cliente
             $sql = "SELECT TOP 1 Persona IdPaciente
                     FROM PersonaMast cli
                     WHERE ( cli.TipoDocumentoIdentidad ='D'
@@ -707,12 +707,14 @@ class Cita
     public function cargar_citas_pendientes(Request $request, Response $response, array $args)
     {
         try {
+            $configPayme = $this->app->get('settings')['payme'];
             $user = $request->getAttribute('decoded_token_data');
             $idusuario = $user->idusuario;
             $sql = "
                 SELECT c.*
                 FROM(
                     SELECT
+                        LPAD(cit.idcita,6,0) AS identificador,
                         cit.idcita,
                         cit.idcliente,
                         cit.fecha_cita,
@@ -723,6 +725,7 @@ class Cita
                         cl.nombres,
                         cl.apellido_paterno,
                         cl.apellido_materno,
+                        cl.correo,
                         'TITULAR' AS parentesco,
                         UPPER(MONTHNAME(cit.fecha_cita)) AS mes,
                         DAY(cit.fecha_cita) AS dia
@@ -731,9 +734,10 @@ class Cita
                     JOIN cita cit ON cl.idcliente = cit.idcliente
                     WHERE us.idusuario = :idusuario
                     AND cit.estado_cita IN (1,2)
-                    AND cit.fecha_cita >= NOW()
+                    -- AND cit.fecha_cita >= NOW()
                     UNION ALL
                     SELECT
+                        LPAD(cit.idcita,6,0) AS identificador,
                         cit.idcita,
                         cit.idcliente,
                         cit.fecha_cita,
@@ -744,6 +748,7 @@ class Cita
                         fam.nombres,
                         fam.apellido_paterno,
                         fam.apellido_materno,
+                        fam.correo,
                         par.descripcion_par AS parentesco,
                         UPPER(MONTHNAME(cit.fecha_cita)) AS mes,
                         DAY(cit.fecha_cita) AS dia
@@ -754,7 +759,7 @@ class Cita
                     JOIN cita cit ON fam.idcliente = cit.idcliente
                     WHERE us.idusuario = :idusuario
                     AND cit.estado_cita IN (1,2)
-                    AND cit.fecha_cita >= NOW()
+                    -- AND cit.fecha_cita >= NOW()
                 ) AS c
                 ORDER BY c.fecha_cita DESC
                 LIMIT 10
@@ -769,8 +774,41 @@ class Cita
                 $message = "No tiene citas pendientes";
                 $flag = 0;
             }
+            $arrData = array();
+            foreach ($data as $key => $row) {
+                $arrData[$key] = $row;
+                $monto = 10; // cambiar aqui precio
+                $montoPorCien = $monto * 100;
+                $arrData[$key]['purchaseVerification'] = openssl_digest(
+                    (
+                        $configPayme['acquirerId']. 
+                        $configPayme['idCommerce']. 
+                        $row['identificador']. 
+                        $montoPorCien. 
+                        $configPayme['purchaseCurrencyCode']. 
+                        $configPayme['keyPasarela']
+                    ),
+                    'sha512'
+                );
+                $arrData[$key]['acquirerId'] = $configPayme['acquirerId'];
+                $arrData[$key]['idCommerce'] = $configPayme['idCommerce'];
+                $arrData[$key]['purchaseOperationNumber'] = $row['identificador'];
+                $arrData[$key]['purchaseAmount'] = $montoPorCien;
+                $arrData[$key]['purchaseCurrencyCode'] = $configPayme['purchaseCurrencyCode'];
+                $arrData[$key]['language'] = $configPayme['language'];
+                $arrData[$key]['shippingFirstName'] = $row['nombres'];
+                $arrData[$key]['shippingLastName'] = $row['apellido_paterno'].' '.$row['apellido_materno'];
+                $arrData[$key]['shippingEmail'] = $row['correo'];
+                $arrData[$key]['shippingAddress'] = 'NO ESPECIFICADO';
+                $arrData[$key]['shippingZIP'] = $configPayme['shippingZIP'];
+                $arrData[$key]['userCommerce'] = $row['idcliente'];
+                $arrData[$key]['descriptionProducts'] = 'CONSULTA DE '.strtoupper($row['especialidad']);
+                $arrData[$key]['programmingLanguage'] = $configPayme['programmingLanguage'];
+                // $arrData[$key]['language'] = $configPayme['language'];
+                // $arrData[$key]['language'] = $configPayme['language'];
+            }
             return $response->withJson([
-                'datos' => $data,
+                'datos' => $arrData,
                 'flag' => $flag,
                 'message' => $message
             ]);
@@ -1157,7 +1195,7 @@ class Cita
             $resultado = $this->app->db_mssql->prepare($sql);
             $resultado->execute();
             if ($lista = $resultado->fetchAll()) {
-                $message = "Se encontraron fechas programadas";
+                $message = "Se encontraron turnos programados";
                 $flag = 1;
                 $arrListado = array();
                 foreach ($lista as $key => $row) {
