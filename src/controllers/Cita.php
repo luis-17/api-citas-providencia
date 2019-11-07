@@ -15,6 +15,67 @@ class Cita
 
     }
     /**
+    * Registra la transacción como codigo unico, de tal forma que una cita puede tener varias transacciones pero solo una autorizada.
+    * idcita: 21
+    * Creado: 08-04-2019
+    * Modificado: 23-04-2019
+    * @author Ing. Ricardo Luna <luisls1717@gmail.com>
+    * @param Request $request
+    * @param Response $response
+    * @return void
+    */
+    public function registrar_transaccion(Request $request, Response $response)
+    {
+        try {
+            // VALIDACIONES
+            $validator = $this->app->validator->validate($request, [
+                'idcita'     => V::notBlank()->digit()
+            ]);
+
+            if ( !$validator->isValid() ) {
+                // var_dump('entroo');
+                $errors = $validator->getErrors();
+                return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
+            }
+            $idcita     = $request->getParam('idcita');
+            $fecha      = date('Y-m-d H:i:s');
+
+            // insertamos en tabla transaccion 
+            $sqlInsertTran = "INSERT INTO transaccion (
+                idcita,
+                fecha
+            ) VALUES (
+                :idcita,
+                :fecha
+            )";
+            $resultado = $this->app->db->prepare($sqlInsertTran);
+            $resultado->bindParam(':idcita',$idcita);
+            $resultado->bindParam(':fecha',$fecha);
+            $resultado->execute();
+
+            // actualizamos en tabla transaccion
+            
+
+            // $sql = "
+            //     SELECT
+            //         ci.idcita,
+            //         ci.
+            //     FROM cita AS ci
+            //     JOIN cliente cl ON us.idusuario = cl.idusuario
+            //     WHERE us.idusuario = :idusuario
+            //     LIMIT 1
+            // ";
+
+        } catch (\Exception $th) {
+            return $response->withJson([
+                'flag' => 0,
+                'message' => "Error al registrar transacción.",
+                'error' => $th
+            ]);
+        }
+    }
+
+    /**
      * Registra una cita mandando por json lo siguiente
      * "idcliente" : 1, // id del cliente que se va a atender
      * "idgarante" : 2,
@@ -42,19 +103,20 @@ class Cita
             // $idcliente = (int)$user->idcliente;
 
             // VALIDACIONES
-                $validator = $this->app->validator->validate($request, [
-                    'idcliente'     => V::notBlank()->digit(),
-                    'idgarante'     => V::optional(V::digit()),
-                    'especialidad'  => V::notBlank()->alnum(),
-                    'medico'        => V::notBlank()->stringType(),
-                    'fecha_cita'    => V::notBlank()->date(),
-                ]);
+            $validator = $this->app->validator->validate($request, [
+                'idcliente'     => V::notBlank()->digit(),
+                'idgarante'     => V::optional(V::digit()),
+                'especialidad'  => V::notBlank()->alnum(),
+                'medico'        => V::notBlank()->stringType(),
+                'fecha_cita'    => V::notBlank()->date(),
+            ]);
 
-                if ( !$validator->isValid() ) {
-                    $errors = $validator->getErrors();
-                    return $response->withJson(['error' => true, 'message' => $errors]);
-                }
-
+            if ( !$validator->isValid() ) {
+                // var_dump('entroo');
+                $errors = $validator->getErrors();
+                return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
+            }
+            // var_dump('salii'); exit();
             $idcliente      = $request->getParam('idcliente');
             $idgarante      = $request->getParam('idgarante');
             $idhorario      = $request->getParam('idhorario');
@@ -714,7 +776,7 @@ class Cita
                 SELECT c.*
                 FROM(
                     SELECT
-                        LPAD(cit.idcita,6,0) AS identificador,
+                        LPAD(cit.idcita,6,0) AS identificador, -- ME QUEDE AQUI, CAMBIAR ESTE CODIGOOOOOOOOOO
                         cit.idcita,
                         cit.idcliente,
                         cit.fecha_cita,

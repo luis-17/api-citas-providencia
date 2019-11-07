@@ -60,6 +60,8 @@ $app->group('/api', function(\Slim\App $app) {
 
         $app->post('/registrar_cita', 'App\Routes\Cita:registrar_cita');
 
+        $app->post('/registrar_transaccion', 'App\Routes\Cita:registrar_transaccion');
+
         $app->post('/anular_cita', 'App\Routes\Cita:anular_cita'); // ok
 
         $app->post('/crear_token_culqi', 'App\Routes\Cita:crear_token_culqi');
