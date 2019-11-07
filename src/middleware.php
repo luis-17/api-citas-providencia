@@ -6,6 +6,7 @@ $app->add(new JwtAuthentication([
     "attribute" => "decoded_token_data",
     "secret" => "9Q?6p1jqjl050I#f@2L6l6zi",
     "algorithm" => ["HS256"],
+    "secure" => false,
     "error" => function ($request,$response,$arguments) {
         // echo $arguments;
         $data["status"] = "error";
