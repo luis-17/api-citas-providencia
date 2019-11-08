@@ -196,7 +196,7 @@ class Cita
                         AND cli.DocumentoIdentidad = '". $cliente->numero_documento ."' )
                         OR ( cli.TipoDocumento ='D' AND cli.Documento = '". $cliente->numero_documento ."' )
             ";
-            $resultado = $this->app->db_mssql->prepare($sql);
+            $resultado = $this->app->dblib->prepare($sql);
             $resultado->execute();
             $res = $resultado->fetchAll();
             if( count($res) > 0 ){
@@ -205,7 +205,7 @@ class Cita
             }else{
                 // Obtener el ultimo registro de PersonaMast
                 $sql = "SELECT max ( PersonaMast.Persona ) id FROM PersonaMast ";
-                $resultado = $this->app->db_mssql->prepare($sql);
+                $resultado = $this->app->dblib->prepare($sql);
                 $resultado->execute();
                 $res = $resultado->fetchAll();
                 $IdPaciente = (int)$res[0]['id'] + 1;
@@ -257,7 +257,7 @@ class Cita
                         'N'
                     );
                 ";
-                $resultado = $this->app->db_mssql->prepare($sql);
+                $resultado = $this->app->dblib->prepare($sql);
                 $resultado->execute();
 
                 // Registro de SS_GE_Paciente
@@ -285,14 +285,14 @@ class Cita
                     );
                 ";
 
-                $resultado = $this->app->db_mssql->prepare($sql);
+                $resultado = $this->app->dblib->prepare($sql);
                 $resultado->execute();
             }
 
             // REGISTRO DE CITA EN SQL SERVER
             // Obtener el ultimo registro de SS_CC_Cita
             $sql = "SELECT max ( SS_CC_Cita.IdCita ) id FROM SS_CC_Cita";
-            $resultado = $this->app->db_mssql->prepare($sql);
+            $resultado = $this->app->dblib->prepare($sql);
             $resultado->execute();
             $res = $resultado->fetchAll();
             $IdCita = (int)$res[0]['id'] + 1;
@@ -360,7 +360,7 @@ class Cita
                 1,
                 NULL);
             ";
-            $resultado = $this->app->db_mssql->prepare($sql);
+            $resultado = $this->app->dblib->prepare($sql);
             $resultado->execute();
 
             // Registro de Cita Control
@@ -380,7 +380,7 @@ class Cita
                 '','" . date('d-m-Y H:i:s') ."'
                 )
             ";
-            $resultado = $this->app->db_mssql->prepare($sql);
+            $resultado = $this->app->dblib->prepare($sql);
             $resultado->execute();
 
             return $response->withJson([
@@ -543,7 +543,7 @@ class Cita
                 FechaModificacion = '" . date('d-m-Y H:i:s') ."'
             WHERE SS_CC_Cita.IdCita = $idcita
             ";
-            $resultado = $this->app->db_mssql->prepare($ms_sql);
+            $resultado = $this->app->dblib->prepare($ms_sql);
             $resultado->execute();
 
             /**Registro cita_control */
@@ -551,7 +551,7 @@ class Cita
             FROM SS_CC_CitaControl WITH ( NOLOCK )
             WHERE SS_CC_CitaControl.IdDocumento = $idcita";
 
-            $resultado = $this->app->db_mssql->prepare($ms_sql);
+            $resultado = $this->app->dblib->prepare($ms_sql);
             $resultado->execute();
             $res = $resultado->fetchAll();
             $secuencial = (int)$res[0]['secuencial'] + 1;
@@ -574,7 +574,7 @@ class Cita
                 '" . date('d-m-Y H:i:s') ."'
 
             )";
-            $resultado = $this->app->db_mssql->prepare($ms_sql);
+            $resultado = $this->app->dblib->prepare($ms_sql);
             $resultado->execute();
 
             return $response->withJson([
@@ -601,6 +601,21 @@ class Cita
     public function cargar_especialidades(Request $request, Response $response, array $args)
     {
         try {
+
+            // $serverName = "190.12.89.170";
+            // $connectionOptions = array(
+            //     "Database" => "SpringSalud_Produccion_Providencia",
+            //     "Uid" => "test",
+            //     "PWD" => "123456"
+            // );
+            // //Establishes the connection
+            // $conn = sqlsrv_connect($serverName, $connectionOptions);
+            // if($conn){
+            //     echo "Connected!";
+            // }
+            // echo 'Despues de conectar';
+            // return;
+            // echo 'Hola Mundo SQL Server xd';
             $user = $request->getAttribute('decoded_token_data');
 
             $idusuario = $user->idusuario;
@@ -617,7 +632,7 @@ class Cita
                     esp.Estado = 2
                 ORDER BY esp.Descripcion ASC
             ";
-            $resultado = $this->app->db_mssql->prepare($sql);
+            $resultado = $this->app->dblib->prepare($sql);
             $resultado->execute();
             if ($lista = $resultado->fetchAll()) {
                 $message = "Se encontraron especialidades";
@@ -713,7 +728,7 @@ class Cita
                     ORDER BY NombreCompleto ASC
             ";
 
-            $resultado = $this->app->db_mssql->prepare($sql);
+            $resultado = $this->app->dblib->prepare($sql);
             // $resultado->bindParam(':periodo', $periodo);
             // $resultado->bindParam(':idespecialidad', $idespecialidad);
 
@@ -1110,7 +1125,7 @@ class Cita
 
             ";
 
-            $resultado = $this->app->db_mssql->prepare($sql);
+            $resultado = $this->app->dblib->prepare($sql);
             // $resultado->bindParam(':periodo', $periodo);
             // $resultado->bindParam(':idespecialidad', $idespecialidad);
 
@@ -1254,7 +1269,7 @@ class Cita
 
             ";
 
-            $resultado = $this->app->db_mssql->prepare($sql);
+            $resultado = $this->app->dblib->prepare($sql);
             $resultado->execute();
             if ($lista = $resultado->fetchAll()) {
                 $message = "Se encontraron turnos programados";
