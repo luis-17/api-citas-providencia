@@ -52,20 +52,56 @@ class Cita
             $resultado->bindParam(':idcita',$idcita);
             $resultado->bindParam(':fecha',$fecha);
             $resultado->execute();
+            $tracod = $this->app->db->lastInsertId();
 
-            // actualizamos en tabla transaccion
+            $purchaseOperationNumber = str_pad($idcita.$tracod,6,"0",STR_PAD_LEFT);
             
+            // procesamos info
+            $sqlCita = "
+                SELECT
+                    ci.idcita
+                FROM cita AS ci
+                WHERE ci.idcita = :idcita
+                LIMIT 1
+            ";
+            $resultado = $this->app->db->prepare($sqlCita);
+            $resultado->bindParam(":idcita", $idcita);
+            $resultado->execute();
+            $fCita = $resultado->fetchObject();
 
-            // $sql = "
-            //     SELECT
-            //         ci.idcita,
-            //         ci.
-            //     FROM cita AS ci
-            //     JOIN cliente cl ON us.idusuario = cl.idusuario
-            //     WHERE us.idusuario = :idusuario
-            //     LIMIT 1
-            // ";
+            $monto = 10; // cambiar aqui precio
+            $montoPorCien = $monto * 100;
+            $configPayme = $this->app->get('settings')['payme'];
+            $purchaseVerification = openssl_digest(
+                (
+                    $configPayme['acquirerId']. 
+                    $configPayme['idCommerce']. 
+                    $purchaseOperationNumber. 
+                    $montoPorCien. 
+                    $configPayme['purchaseCurrencyCode']. 
+                    $configPayme['keyPasarela']
+                ),
+                'sha512'
+            );
+            
+            // actualizamos en tabla transaccion
+            $sql = "UPDATE transaccion SET
+                purchaseVerification  = :purchaseVerification,
+                purchaseOperationNumber  = :purchaseOperationNumber
+                WHERE idtransaccion = $tracod
+            ";
 
+            $resultado = $this->app->db->prepare($sql);
+            $resultado->bindParam(':purchaseVerification', $purchaseVerification);
+            $resultado->bindParam(':purchaseOperationNumber', $purchaseOperationNumber);
+            $resultado->execute();
+
+            return $response->withJson([
+                'flag' => 1,
+                'message' => "El registro fue satisfactorio.",
+                'purchaseVerification' => $purchaseVerification,
+                'purchaseOperationNumber'=> $purchaseOperationNumber
+            ]);
         } catch (\Exception $th) {
             return $response->withJson([
                 'flag' => 0,
@@ -477,7 +513,7 @@ class Cita
 			);
 
             $datos_cargo = get_object_vars($charge);
-            print($datos_cargo);
+            // print($datos_cargo);
             $sql = "UPDATE cita SET
                 fecha_pago  = :fecha_pago,
                 monto_cita  = :monto_cita,
@@ -856,17 +892,17 @@ class Cita
                 $arrData[$key] = $row;
                 $monto = 10; // cambiar aqui precio
                 $montoPorCien = $monto * 100;
-                $arrData[$key]['purchaseVerification'] = openssl_digest(
-                    (
-                        $configPayme['acquirerId']. 
-                        $configPayme['idCommerce']. 
-                        $row['identificador']. 
-                        $montoPorCien. 
-                        $configPayme['purchaseCurrencyCode']. 
-                        $configPayme['keyPasarela']
-                    ),
-                    'sha512'
-                );
+                // $arrData[$key]['purchaseVerification'] = openssl_digest(
+                //     (
+                //         $configPayme['acquirerId']. 
+                //         $configPayme['idCommerce']. 
+                //         $row['identificador']. 
+                //         $montoPorCien. 
+                //         $configPayme['purchaseCurrencyCode']. 
+                //         $configPayme['keyPasarela']
+                //     ),
+                //     'sha512'
+                // );
                 $arrData[$key]['acquirerId'] = $configPayme['acquirerId'];
                 $arrData[$key]['idCommerce'] = $configPayme['idCommerce'];
                 $arrData[$key]['purchaseOperationNumber'] = $row['identificador'];
