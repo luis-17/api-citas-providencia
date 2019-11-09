@@ -1307,6 +1307,7 @@ class Cita
 
             $resultado = $this->app->dblib->prepare($sql);
             $resultado->execute();
+            $arrCitas = array();
             if ($lista = $resultado->fetchAll()) {
                 $message = "Se encontraron turnos programados";
                 $flag = 1;
@@ -1335,9 +1336,14 @@ class Cita
             }else{
                 $message = "No se encontraron cupos disponibles en esta fecha.";
                 $flag = 0;
+                return $response->withStatus(400)->withJson([
+                    'datos' => $arrCitas,
+                    'flag' => $flag,
+                    'message' => $message
+                ]);
             }
 			$data = array();
-            $arrCitas = array();
+            
 
             foreach ($arrListado as $row) {
                 $hora_inicio = date('H:i',strtotime($row['InicioHorario']));
@@ -1360,7 +1366,6 @@ class Cita
                     $hora_inicio = $hora_fin;
                     $i++;
                 }
-
             }
 
             return $response->withJson([
