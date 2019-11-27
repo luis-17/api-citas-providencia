@@ -1244,7 +1244,7 @@ class Cita
         } catch (\Exception $th) {
             return $response->withJson([
                 'flag' => 0,
-                'message' => 'Ocurrió un error al cargar los datos'
+                'message' => $th->getMessage()
             ]);
         }
     }
@@ -1377,7 +1377,7 @@ class Cita
         } catch (\Exception $th) {
             return $response->withJson([
                 'flag' => 0,
-                'message' => 'Ocurrió un error al cargar los datos'
+                'message' => $th->getMessage()
             ]);
         }
     }
