@@ -33,7 +33,7 @@ class Acceso
 
         if ( !$validator->isValid() ) {
             $errors = $validator->getErrors();
-            return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
+            return $response->withStatus(400)->withJson(['flag' => 0, 'message' => $errors]);
         }
         // QUERY
         $sql = "
@@ -55,12 +55,12 @@ class Acceso
 
         // verify email address.
         if(!$user) {
-            return $response->withJson(['error' => true, 'message' => 'El usuario no existe o aún no está validado.']);
+            return $response->withStatus(400)->withJson(['flag' => 0, 'message' => 'El usuario no existe o aún no está validado.']);
         }
 
         // verify password.
         if (!password_verify($input['password'],$user->password)) {
-            return $response->withJson(['error' => true, 'message' => 'La contraseña no es válida.']);
+            return $response->withStatus(400)->withJson(['flag' => 0, 'message' => 'La contraseña no es válida.']);
         }
 
         $settings = $this->app->get('settings')['jwt']; // get settings array.
@@ -92,7 +92,7 @@ class Acceso
 
             $resultado->execute();
 
-        return $response->withJson(['token' => $token]);
+        return $response->withJson(['flag' => 1, 'message' => 'Ok.', 'token' => $token]);
 
     }
 
@@ -364,7 +364,7 @@ class Acceso
                 ]);
             }
         } catch (\Exception $th) {
-            return $response->withStatus(400)->withJson([
+            return $response->withJson([
                 'flag' => 0,
                 'message' => "El enlace no es válido o ya no está disponible."
             ]);
@@ -380,15 +380,15 @@ class Acceso
     public function recuperaPassword(Request $request, Response $response)
     {
         $validator = $this->app->validator->validate($request, [
-            'numero_documento' => V::notBlank()->digit(),
+            'numeroDocumento' => V::notBlank()->digit(),
         ]);
 
         if ( !$validator->isValid() ) {
             $errors = $validator->getErrors();
-            return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
+            return $response->withStatus(400)->withJson(['error' => true, 'message' => $this->app->get('settings')['message']['400'], 'messageTec' => $errors]);
         }
 
-        $numero_documento = $request->getParam('numero_documento');
+        $numero_documento = $request->getParam('numeroDocumento');
 
         $sql = "
             SELECT
@@ -526,7 +526,7 @@ class Acceso
 
     public function actualizaPassword(Request $request, Response $response)
     {
-        $password  = password_hash($request->getParam('password_new'),PASSWORD_DEFAULT);
+        $password  = password_hash($request->getParam('password'),PASSWORD_DEFAULT);
         $token   = $request->getParam('token');
         $settings = $this->app->get('settings')['jwt'];
         try {
