@@ -1383,7 +1383,7 @@ class Cita
             $dataFinal = array();
             $numFinal = 42;
             $countExist = 0;
-            for ($i=1; $i <= $numFinal; ) { 
+            for ($i=1; $i <= $numFinal; ) {
                 if( $i <= $week_day_first ){
                     $dataFinal[] = array(
                         'fecha' => null,
@@ -1413,17 +1413,23 @@ class Cita
 
                 $i++;
             }
+            // print_r($dataFinal); exit();
             // generar fechas validas
             foreach ($dataFinal as $key => $row) {
                 $fechaStr = $row['fecha'];
                 $fechaMasDosDias = date('d-m-Y', strtotime('+2 days'));
+                $fechaMasDosDiasTS = strtotime($fechaMasDosDias);
+                $fechaStrTS = strtotime($fechaStr);
                 foreach ($arrListaPreparada as $rowLista) {
-                    if( $fechaStr == $rowLista['fecha'] && $fechaStr >= $fechaMasDosDias ){
+                    // $str
+                    if( $fechaStr == $rowLista['fecha'] && $fechaStrTS >= $fechaMasDosDiasTS ){
+                        // var_dump($fechaStr, $fechaMasDosDias);
                         $dataFinal[$key]['valid'] = 'si';
                         $dataFinal[$key]['class'] = ' active';
                     }
                 }
             }
+            // exit();
             // agrupar por semana
             $dataGroupFinal = array_chunk($dataFinal, 7);
             $mesSeleccionado = $this->convertir_mes(date('M',strtotime($desdeFecha)));
