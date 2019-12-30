@@ -41,7 +41,10 @@ class Acceso
                 us.idusuario,
                 us.username,
                 us.password,
-                cl.idcliente
+                cl.idcliente,
+                cl.nombres,
+                cl.apellido_paterno,
+                cl.apellido_materno
             FROM usuario AS us
             JOIN cliente cl ON us.idusuario = cl.idusuario
             WHERE us.username = :username
@@ -70,6 +73,9 @@ class Acceso
                 'idusuario' => $user->idusuario,
                 'username' => $user->username,
                 'idcliente' => $user->idcliente,
+                'nombres' => $user->nombres,
+                'apellido_paterno' => $user->apellido_paterno,
+                'apellido_materno' => $user->apellido_materno,
                 'ini' => $time,
                 'exp' => $time + (24*60*60)
             ],
@@ -258,6 +264,7 @@ class Acceso
                 $token = JWT::encode(
                     [
                         'idusuario' => $idusuario,
+                        'correo'=> $correo,
                         'username' => $username,
                         'iat' => $time,
                         'exp' => $time + (60*60)
@@ -270,18 +277,24 @@ class Acceso
                 $fromAlias = 'Clínica Providencia';
 
                 $asunto = 'Confirma tu cuenta de Clínica Providencia';
-                $mensaje = '<html lang="es">';
-                $mensaje .= '<body style="font-family: sans-serif;padding: 10px 40px;" >';
-                $mensaje .= '<div style="max-width: 700px;align-content: center;margin-left: auto; margin-right: auto;padding-left: 5%; padding-right: 5%;">';
-                $mensaje .= '	<div style="font-size:16px;">
-                                    Estimado(a) paciente: '.$paciente .', <br /> <br /> ';
 
-                $mensaje .= '     <a href="' . FRONT_URL . 'validar-cuenta/'. $token .'">Haz clic aquí para continuar con el proceso de registro.</a>';
-                $mensaje .= '    </div>';
-                $mensaje .= '    <div>
-                                    <p>Si no has solicitado la suscripción a este correo electrónico, ignóralo y la suscripción no se activará.</p>
-                                </div>';
-                $mensaje .=  '</div>';
+                $mensaje = '<html lang="es">';
+                $mensaje .= '<body style="font-family: sans-serif;" >';
+                  $mensaje .= '<div style="align-content: center;">';
+                    $mensaje .= '<div class="header-page" style="background-color:#00386c;padding: 0.75rem;">';
+                      $mensaje .= '<img style="width: 175px;" src="http://104.131.176.122/mailing-providencia/logo_alt.png" />';
+                    $mensaje .= '</div>';
+                    $mensaje .= '<div class="content-page" style="background-color:#e9f1f5;padding:1.5rem 3rem;">';
+                      $mensaje .= '<div style="font-size:16px;max-width: 600px;display: inline-block;">';
+                        $mensaje .= '<h2 style="margin: 0;color: #00386c;margin-bottom: 1.75rem;">Ya falta poco...</h2>';
+                        $mensaje .= '<div style="font-size:16px;">Estimado(a) paciente: '.$paciente .', <br /> <br /> ';
+                          $mensaje .= '<a style="color: #056990;display: block;padding-bottom: 0.5rem;" href="' . FRONT_URL . 'validar-cuenta/'. $token .'">Haz clic aquí para continuar con el proceso de registro.</a>';
+                          $mensaje .= '<small>Si no has solicitado la suscripción a este correo electrónico, ignóralo y la suscripción no se activará.</small>';
+                        $mensaje .= '</div>';
+                      $mensaje .= '</div>';
+                      $mensaje .= '<div style="display: inline-block;"><img style="width:260px;" src="http://104.131.176.122/mailing-providencia/doctor.png" /></div>';
+                    $mensaje .= '</div>';
+                  $mensaje .=  '</div>';
                 $mensaje .= '</body>';
                 $mensaje .= '</html>';
 
@@ -346,13 +359,65 @@ class Acceso
                 $settings['secret'],
                 array($settings['encrypt'])
             );
+            // var_dump($decode); exit();
             $idusuario = $decode->idusuario;
+            $correo = $decode->correo;
 
             $sql = "UPDATE usuario SET flag_mail_confirm = 2 WHERE idusuario = $idusuario";
             try {
                 $resultado = $this->app->db->prepare($sql);
                 $resultado->execute();
+                
+                // ENVIO DE CORREO
+                $fromAlias = 'Clínica Providencia';
 
+                $asunto = 'Bienvenido a la Clínica Providencia';
+
+                $mensaje = '<html lang="es">';
+                $mensaje .= '<body style="font-family: sans-serif;" >';
+                  $mensaje .= '<div style="align-content: center;">';
+                    $mensaje .= '<div class="header-page" style="background-color:#00386c;padding: 0.75rem;">';
+                      $mensaje .= '<img style="width: 175px;" src="http://104.131.176.122/mailing-providencia/logo_alt.png" />';
+                    $mensaje .= '</div>';
+                    $mensaje .= '<div class="content-page" style="background-color:#e9f1f5;padding:1.5rem 3rem;">';
+                      $mensaje .= '<div style="font-size:16px;max-width: 600px;display: inline-block;">';
+                        $mensaje .= '<h2 style="margin: 0;color: #00386c;margin-bottom: 1.75rem;">Bienvenido, estamos muy felices de que se haya unido a nosotros.</h2>';
+                        $mensaje .= '<div style="font-size:16px;"> Gracias por su confianza y preferencia. <b>Clínica Providencia</b> es una empresa peruana vinculada al rubro de salud con mas de 7 años de experiencia. Contamos con mas de 40 especialidades médicas, la mas moderna tecnología y profesionales altamente calificados. <br /> <br /> ';
+                          // $mensaje .= '<a style="color: #056990;display: block;padding-bottom: 0.5rem;" href="' . FRONT_URL . 'validar-cuenta/'. $token .'">Haz clic aquí para continuar con el proceso de registro.</a>';
+                          $mensaje .= '<p>Inicie sesión y realice su primera cita:</p>';
+                          $mensaje .= '<a style="padding: 0.5rem;display: inline-block;background-color: #00386c;color: white;text-decoration: none;border-radius: 5px;" href="'.FRONT_URL.'">Iniciar sesión</a>';
+                        $mensaje .= '</div>';
+                      $mensaje .= '</div>';
+                      $mensaje .= '<div style="display: inline-block;"><img style="width:260px;" src="http://104.131.176.122/mailing-providencia/doctor_edificio.png" /></div>';
+                    $mensaje .= '</div>';
+                  $mensaje .=  '</div>';
+                $mensaje .= '</body>';
+                $mensaje .= '</html>';
+
+                $mail = new PHPMailer();
+                $mail->IsSMTP(true);
+                $mail->SMTPAuth = true;
+                $mail->SMTPDebug = false;
+                $mail->SMTPSecure = SMTP_SECURE;
+                $mail->Host = SMTP_HOST;
+                $mail->Port = SMTP_PORT;
+                $mail->Username =  SMTP_USERNAME;
+                $mail->Password = SMTP_PASSWORD;
+                $mail->SetFrom(SMTP_USERNAME,$fromAlias);
+                $mail->AddReplyTo(SMTP_USERNAME,$fromAlias);
+                $mail->Subject = $asunto;
+                $mail->IsHTML(true);
+                $mail->AltBody = $mensaje;
+                $mail->MsgHTML($mensaje);
+                $mail->CharSet = 'UTF-8';
+                $mail->AddAddress($correo);
+                $msgCorreo = NULL;
+                if($mail->Send()){
+
+                }else{
+                    $msgCorreo = 'No se envio correo. ';
+                    print_r("No se envio correo");
+                }
                 return $response->withJson([
                     'flag' => 1,
                     'message' => "Tu cuenta ha sido verificada exitosamente... Ya puedes iniciar sesión para comenzar a disfrutar los beneficios de ser un paciente de Clínica Providencia!."
@@ -438,20 +503,40 @@ class Acceso
             $fromAlias = 'Clínica Providencia';
 
             $asunto = 'Olvidó su contraseña.';
-            $mensaje = '<html lang="es">';
-            $mensaje .= '<body style="font-family: sans-serif;padding: 10px 40px;" >';
-            $mensaje .= '<div style="max-width: 700px;align-content: center;margin-left: auto; margin-right: auto;padding-left: 5%; padding-right: 5%;">';
-            $mensaje .= '	<div style="font-size:16px;">
-                                Estimado(a) paciente: '.$paciente .', <br /> <br /> ';
 
-            $mensaje .= '     <a href="' . FRONT_URL . 'recuperar-cuenta/'. $token .'">Haz clic aquí para continuar con el proceso de recuperación de contraseña.</a>';
-            $mensaje .= '    </div>';
-            $mensaje .= '    <div>
-                                <p>Si no has solicitado el cambio de contraseña a este correo electrónico, ignóralo y el cambio no se realizará..</p>
-                            </div>';
-            $mensaje .=  '</div>';
-            $mensaje .= '</body>';
-            $mensaje .= '</html>';
+            $mensaje = '<html lang="es">';
+              $mensaje .= '<body style="font-family: sans-serif;" >';
+                $mensaje .= '<div style="align-content: center;">';
+                  $mensaje .= '<div class="header-page" style="background-color:#00386c;padding: 0.75rem;">';
+                    $mensaje .= '<img style="width: 175px;" src="http://104.131.176.122/mailing-providencia/logo_alt.png" />';
+                  $mensaje .= '</div>';
+                  $mensaje .= '<div class="content-page" style="background-color:#e9f1f5;padding:1.5rem 3rem;">';
+                    $mensaje .= '<div style="font-size:16px;max-width: 600px;display: inline-block;">';
+                      $mensaje .= '<h2 style="margin: 0;color: #00386c;margin-bottom: 1.75rem;">Tranquilo, nosotros te ayudamos.</h2>';
+                      $mensaje .= '<div style="font-size:16px;">Estimado(a) paciente: '.$paciente .', <br /> <br /> ';
+                        $mensaje .= '<a style="color: #056990;display: block;padding-bottom: 0.5rem;" href="' . FRONT_URL . 'recuperar-cuenta/'. $token .'">Haz clic aquí para continuar con el proceso de recuperación de contraseña.</a>';
+                        $mensaje .= '<small>Si no has solicitado la suscripción a este correo electrónico, ignóralo y la suscripción no se activará.</small>';
+                      $mensaje .= '</div>';
+                    $mensaje .= '</div>';
+                    $mensaje .= '<div style="display: inline-block;"><img style="width:260px;" src="http://104.131.176.122/mailing-providencia/doctor.png" /></div>';
+                  $mensaje .= '</div>';
+                $mensaje .=  '</div>';
+              $mensaje .= '</body>';
+              $mensaje .= '</html>';
+            // $mensaje = '<html lang="es">';
+            // $mensaje .= '<body style="font-family: sans-serif;padding: 10px 40px;" >';
+            // $mensaje .= '<div style="max-width: 700px;align-content: center;margin-left: auto; margin-right: auto;padding-left: 5%; padding-right: 5%;">';
+            // $mensaje .= '	<div style="font-size:16px;">
+            //                     Estimado(a) paciente: '.$paciente .', <br /> <br /> ';
+
+            // $mensaje .= '     <a href="' . FRONT_URL . 'recuperar-cuenta/'. $token .'">Haz clic aquí para continuar con el proceso de recuperación de contraseña.</a>';
+            // $mensaje .= '    </div>';
+            // $mensaje .= '    <div>
+            //                     <p>Si no has solicitado el cambio de contraseña a este correo electrónico, ignóralo y el cambio no se realizará..</p>
+            //                 </div>';
+            // $mensaje .=  '</div>';
+            // $mensaje .= '</body>';
+            // $mensaje .= '</html>';
 
             $mail = new PHPMailer();
             $mail->IsSMTP(true);
@@ -560,5 +645,98 @@ class Acceso
             ]);
         }
 
+    }
+    public function verPlantillaHTML()
+    {
+      // $mensaje = '<html lang="es">';
+      // $mensaje .= '<body style="font-family: sans-serif;" >';
+      //   $mensaje .= '<div style="align-content: center;">';
+      //     $mensaje .= '<div class="header-page" style="background-color:#00386c;padding: 0.75rem;">';
+      //       $mensaje .= '<img style="width: 175px;" src="http://104.131.176.122/mailing-providencia/logo_alt.png" />';
+      //     $mensaje .= '</div>';
+      //     $mensaje .= '<div class="content-page" style="background-color:#e9f1f5;padding:1.5rem 3rem;">';
+      //       $mensaje .= '<div style="font-size:16px;">';
+      //         $mensaje .= '<h2 style="margin: 0;color: #00386c;margin-bottom: 1.75rem;">Ya falta poco...</h2>';
+      //         $mensaje .= '<div style="font-size:16px;">Estimado(a) paciente: LUIS RICARDO LUNA SOTO, <br /> <br /> ';
+      //           $mensaje .= '<a style="color: #056990;display: block;padding-bottom: 0.5rem;" href="' . FRONT_URL . 'validar-cuenta/askjnfskfjksgjknsjdkgnjksdk">Haz clic aquí para continuar con el proceso de registro.</a>';
+      //           $mensaje .= '<small>Si no has solicitado la suscripción a este correo electrónico, ignóralo y la suscripción no se activará.</small>';
+      //         $mensaje .= '</div>';
+      //       $mensaje .= '</div>';
+      //       $mensaje .= '<div style="display: inline-block;"><img style="width:260px;" src="http://104.131.176.122/mailing-providencia/doctor.png" /></div>';
+      //     $mensaje .= '</div>';
+      //   $mensaje .=  '</div>';
+      // $mensaje .= '</body>';
+      // $mensaje .= '</html>';
+
+        // $mensaje = '<html lang="es">';
+        // $mensaje .= '<body style="font-family: sans-serif;" >';
+        //   $mensaje .= '<div style="align-content: center;">';
+        //     $mensaje .= '<div class="header-page" style="background-color:#00386c;padding: 0.75rem;">';
+        //       $mensaje .= '<img style="width: 175px;" src="http://104.131.176.122/mailing-providencia/logo_alt.png" />';
+        //     $mensaje .= '</div>';
+        //     $mensaje .= '<div class="content-page" style="background-color:#e9f1f5;padding:1.5rem 3rem;">';
+        //       $mensaje .= '<div style="font-size:16px;max-width: 600px;">';
+        //         $mensaje .= '<h2 style="margin: 0;color: #00386c;margin-bottom: 1.75rem;">Bienvenido, estamos muy felices de que se haya unido a nosotros.</h2>';
+        //         $mensaje .= '<div style="font-size:16px;"> Gracias por su confianza y preferencia. <b>Clínica Providencia</b> es una empresa peruana vinculada al rubro de salud con mas de 7 años de experiencia. Contamos con mas de 40 especialidades médicas, la mas moderna tecnología y profesionales altamente calificados. <br /> <br /> ';
+        //           // $mensaje .= '<a style="color: #056990;display: block;padding-bottom: 0.5rem;" href="' . FRONT_URL . 'validar-cuenta/'. $token .'">Haz clic aquí para continuar con el proceso de registro.</a>';
+        //           $mensaje .= '<p>Inicie sesión y realice su primera cita:</p>';
+        //           $mensaje .= '<a style="padding: 0.5rem;display: inline-block;background-color: #00386c;color: white;text-decoration: none;border-radius: 5px;" href="'.FRONT_URL.'">Iniciar sesión</a>';
+        //         $mensaje .= '</div>';
+        //       $mensaje .= '</div>';
+        //       $mensaje .= '<div style="display: inline-block;"><img style="width:260px;" src="http://104.131.176.122/mailing-providencia/doctor_edificio.png" /></div>';
+        //     $mensaje .= '</div>';
+        //   $mensaje .=  '</div>';
+        // $mensaje .= '</body>';
+        // $mensaje .= '</html>';
+
+        // $mensaje = '<html lang="es">';
+        //   $mensaje .= '<body style="font-family: sans-serif;" >';
+        //     $mensaje .= '<div style="align-content: center;">';
+        //       $mensaje .= '<div class="header-page" style="background-color:#00386c;padding: 0.75rem;">';
+        //         $mensaje .= '<img style="width: 175px;" src="http://104.131.176.122/mailing-providencia/logo_alt.png" />';
+        //       $mensaje .= '</div>';
+        //       $mensaje .= '<div class="content-page" style="background-color:#e9f1f5;padding:1.5rem 3rem;">';
+        //         $mensaje .= '<div style="font-size:16px;max-width: 600px;display: inline-block;">';
+        //           $mensaje .= '<h2 style="margin: 0;color: #00386c;margin-bottom: 1.75rem;">Tranquilo, nosotros te ayudamos.</h2>';
+        //           $mensaje .= '<div style="font-size:16px;">Estimado(a) paciente: JUAN PAREDES CASTRO, <br /> <br /> ';
+        //             $mensaje .= '<a style="color: #056990;display: block;padding-bottom: 0.5rem;" href="' . FRONT_URL . 'recuperar-cuenta/ASDFASDFFDS">Haz clic aquí para continuar con el proceso de recuperación de contraseña.</a>';
+        //             $mensaje .= '<small>Si no has solicitado la suscripción a este correo electrónico, ignóralo y la suscripción no se activará.</small>';
+        //           $mensaje .= '</div>';
+        //         $mensaje .= '</div>';
+        //         $mensaje .= '<div style="display: inline-block;"><img style="width:260px;" src="http://104.131.176.122/mailing-providencia/doctor.png" /></div>';
+        //       $mensaje .= '</div>';
+        //     $mensaje .=  '</div>';
+        //   $mensaje .= '</body>';
+        //   $mensaje .= '</html>';
+
+        $mensaje = '<html lang="es">';
+        $mensaje .= '<body style="font-family: sans-serif;" >';
+          $mensaje .= '<div style="align-content: center;">';
+            $mensaje .= '<div class="header-page" style="background-color:#00386c;padding: 0.75rem;">';
+              $mensaje .= '<img style="width: 175px;" src="http://104.131.176.122/mailing-providencia/logo_alt.png" />';
+            $mensaje .= '</div>';
+            $mensaje .= '<div class="content-page" style="background-color:#e9f1f5;padding:1.5rem 3rem;">';
+              $mensaje .= '<div style="font-size:16px;max-width: 600px;display: inline-block;">';
+                $mensaje .= '<h2 style="margin: 0;color: #739525;margin-bottom: 1.75rem;"> <strong style="color:#00386c;">LUIS RICARDO,</strong> <br> ha reservado su cita en línea de manera correcta.</h2>';
+                $mensaje .= '<div style="font-size:16px;color: #777777;"> Gracias por su confianza y preferencia. A continuación le brindamos los datos de su cita médica: <br /> <br /> ';
+                  $mensaje .= '<table style="width:100%;color: #777777;">';
+                    $mensaje .= '<tr><td><b>FECHA DE CITA:</b></td><td>20/12/2019</td></tr>';
+                    $mensaje .= '<tr><td><b>HORA:</b></td><td>17:30</td></tr>';
+                    $mensaje .= '<tr><td><b>ESPECIALIDAD:</b></td><td>UROLOGÍA</td></tr>';
+                    $mensaje .= '<tr><td><b>MÉDICO:</b></td><td>JUAN PAREDES CASTRO</td></tr>';
+                    // $mensaje .= '<tr><td>CMP</td><td>17:30</td></tr>';
+                  $mensaje .= '</table>';
+                  $mensaje .= '<p>No olvides seguir usando nuestro canal online desde el siguiente link:</p>';
+                  $mensaje .= '<a style="padding: 0.5rem;display:inline-block;background-color:#00386c;color:white;text-decoration: none;border-radius: 5px;" href="'.FRONT_URL.'">ACCEDER</a>';
+                  $mensaje .= '<p style="font-style: italic;font-size: 13px;"><strong>IMPORTANTE:</strong>Si deseas cancelar la cita, puedes hacerlo desde nuestro canal online accediendo a: <a target="_blank" href="http://citasenlinea.clinicaprovidencia.pe/#/">http://citasenlinea.clinicaprovidencia.pe/#/</a></p>';
+                $mensaje .= '</div>';
+              $mensaje .= '</div>';
+              $mensaje .= '<div style="display: inline-block;"><img style="width:260px;" src="http://104.131.176.122/mailing-providencia/doctor_edificio.png" /></div>';
+            $mensaje .= '</div>';
+          $mensaje .=  '</div>';
+        $mensaje .= '</body>';
+        $mensaje .= '</html>';
+
+      return $mensaje;
     }
 }

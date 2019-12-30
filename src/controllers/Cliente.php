@@ -58,7 +58,7 @@ class Cliente
             // var_dump($cliente->imc, 'fd'); exit();
             $cliente->imc = $cliente->imc ?? '[ - ]';
             $cliente->peso = $cliente->peso ?? '[ - ]';
-            $cliente->estatura = $cliente->estatura ?? '[ - ]';
+            $cliente->estatura = (int)$cliente->estatura ?? '[ - ]';
             $cliente->tipo_sangre = $cliente->tipo_sangre ?? '[ - ]';
             return $response->withJson([
                 'datos' => $cliente,
@@ -72,7 +72,6 @@ class Cliente
                 'message' => "El token no es válido o ya no está disponible."
             ]);
         }
-
     }
     /**
      * Carga los familiares del paciente logueado
@@ -503,9 +502,9 @@ class Cliente
                 // 'numero_documento' => V::notBlank()->digit(),
                 // 'fecha_nacimiento' => V::date(),
                 'telefono' => V::digit(),
-                'tipo_sangre' => V::length(null,3),
-                'peso' => V::length(null,3),
-                'estatura' => V::length(null,3),
+                // 'tipo_sangre' => V::length(null,3),
+                // 'peso' => V::length(null,3),
+                // 'estatura' => V::length(null,3),
             ]);
 
             if ( !$validator->isValid() ) {
@@ -513,23 +512,30 @@ class Cliente
                 return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
             }
 
-            $nombres            = $request->getParam('nombres');
-            $apellido_paterno   = $request->getParam('apellido_paterno');
-            $apellido_materno   = $request->getParam('apellido_materno');
+            // $nombres            = $request->getParam('nombres');
+            // $apellido_paterno   = $request->getParam('apellido_paterno');
+            // $apellido_materno   = $request->getParam('apellido_materno');
             $correo             = $request->getParam('correo');
-            $tipo_documento     = $request->getParam('tipo_documento');
-            $numero_documento   = $request->getParam('numero_documento');
-            $fecha_nacimiento   = $request->getParam('fecha_nacimiento');
+            // $tipo_documento     = $request->getParam('tipo_documento');
+            // $numero_documento   = $request->getParam('numero_documento');
+            // $fecha_nacimiento   = $request->getParam('fecha_nacimiento');
             $telefono           = $request->getParam('telefono');
-            $sexo               = $request->getParam('sexo');
+            // $sexo               = $request->getParam('sexo');
             $peso               = $request->getParam('peso');
             $estatura           = $request->getParam('estatura');
             $imc                = null;
-            if( !empty($request->getParam('peso')) && !empty($request->getParam('estatura')) ){
+            $tipo_sangre        = $request->getParam('tipo_sangre');
+            if($peso === '[ - ]'){
+                $peso = null;
+            }
+            if($tipo_sangre === '[ - ]'){
+                $tipo_sangre = null;
+            }
+            if( !empty($peso) && !empty($request->getParam('estatura')) ){
                 $imc = $request->getParam('peso') / (($request->getParam('estatura')/100) * ($request->getParam('estatura')/100));
             }
             
-            $tipo_sangre        = $request->getParam('tipo_sangre');
+            
             $updatedAt          = date('Y-m-d H:i:s');
 
             // $sql = "UPDATE cliente SET

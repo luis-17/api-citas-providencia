@@ -34,6 +34,8 @@ $app->group('/api', function(\Slim\App $app) {
 
     $app->post('/actualizaPassword', 'App\Routes\Acceso:actualizaPassword');
 
+    $app->get('/ver_plantilla_correo', 'App\Routes\Acceso:verPlantillaHTML');
+
 
     $app->group('/platform', function(\Slim\App $app) {
         $app->get('/cargar_perfil_general', 'App\Routes\Cliente:cargar_perfil_general'); // ok
@@ -81,5 +83,6 @@ $app->group('/api', function(\Slim\App $app) {
         $app->post('/cargar_fechas_programadas', 'App\Routes\Cita:cargar_fechas_programadas');
 
         $app->post('/cargar_horario', 'App\Routes\Cita:cargar_horario');
+
     });
 });

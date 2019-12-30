@@ -4,6 +4,8 @@ use Slim\Http\Request;
 use Slim\Http\Response;
 use \Slim\Middleware\JwtAuthentication;
 use \Firebase\JWT\JWT;
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 use Respect\Validation\Validator as V;
 use \Culqi\Culqi;
 
@@ -15,14 +17,14 @@ class Cita
 
     }
     /**
-    * Registra la transacción como codigo unico, de tal forma que una cita puede tener varias transacciones pero solo una autorizada.
-    * idcita: 21
-    * Creado: 08-04-2019
-    * Modificado: 23-04-2019
-    * @author Ing. Ricardo Luna <luisls1717@gmail.com>
-    * @param Request $request
-    * @param Response $response
-    * @return void
+        * Registra la transacción como codigo unico, de tal forma que una cita puede tener varias transacciones pero solo una autorizada.
+        * idcita: 21
+        * Creado: 08-04-2019
+        * Modificado: 23-04-2019
+        * @author Ing. Ricardo Luna <luisls1717@gmail.com>
+        * @param Request $request
+        * @param Response $response
+        * @return void
     */
     public function registrar_transaccion(Request $request, Response $response)
     {
@@ -116,14 +118,14 @@ class Cita
      * "idcliente" : 1, // id del cliente que se va a atender
      * "idgarante" : 2,
      * "idhorario" : 97030, // id del horario de sql server que debe estar en el turno selecc
-	 * "fecha_registro" : "2019-04-08",
-	 * "fecha_cita" : "2019-04-15",
-	 * "hora_inicio" : "08:00",
-	 * "hora_fin" : "08:15",
-	 * "duracionCita" : "15",
+     * "fecha_registro" : "2019-04-08",
+     * "fecha_cita" : "2019-04-15",
+     * "hora_inicio" : "08:00",
+     * "hora_fin" : "08:15",
+     * "duracionCita" : "15",
      * "idmedico" : 1234, // id del medico proveniente del sql server
-	 * "medico" : "LEOPOLDO DANTE",
-	 * "especialidad" : "NUTRICION"
+     * "medico" : "LEOPOLDO DANTE",
+     * "especialidad" : "NUTRICION"
      *
      * Creado: 08-04-2019
      * Modificado: 23-04-2019
@@ -152,6 +154,7 @@ class Cita
                 $errors = $validator->getErrors();
                 return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
             }
+
             // var_dump('salii'); exit();
             $idcliente      = $request->getParam('idcliente');
             $idgarante      = $request->getParam('idgarante');
@@ -163,7 +166,61 @@ class Cita
             $idmedico       = $request->getParam('idmedico');
             $medico         = $request->getParam('medico');
             $especialidad   = $request->getParam('especialidad');
+            $idespecialidad   = $request->getParam('idespecialidad');
             $fecha_registro = date('Y-m-d H:i:s');
+
+            // VALIDAR QUE EL HORARIO ESTE LIBRE EN EL MOMENTO
+            $sqlInCita = "
+                SELECT ci.idcita, ci.idcitaspring
+                FROM cita AS ci
+                JOIN cliente cl ON ci.idcliente = cl.idcliente
+                WHERE cl.idcliente = :idcliente 
+                AND ci.idcitaspring IS NOT NULL 
+            ";
+
+            $resultado = $this->app->db->prepare($sqlInCita);
+            $resultado->bindParam(":idcliente", $idcliente);
+            $resultado->execute();
+            $dataInCitas = $resultado->fetchAll();
+            $arrInCitas = array();
+            foreach ($dataInCitas as $key => $row) {
+                array_push($arrInCitas, $row['idcitaspring']);
+            }
+            if(!empty($dataInCitas)){
+                $condition = implode(', ', $arrInCitas);
+                // $condition = implode(', ', array_map('mysql_real_escape_string', $arr)); 
+                $sqlValid = "SELECT TOP 1 ci.IdCita 
+                    FROM SS_CC_Cita ci 
+                    INNER JOIN SS_CC_Horario hor ON ci.IdHorario = hor.IdHorario 
+                    WHERE ci.IdCita IN (".$condition.") 
+                    AND CAST(ci.FechaCita AS DATE) = '".$fecha_cita."' 
+                    AND ( ci.IdHorario = '".$idhorario."' OR hor.IdEspecialidad = '".$idespecialidad."' )
+                    AND ci.Estado = 2 
+                ";
+                // var_dump($sqlValid,'sqlxd');
+                $resultado = $this->app->dblib->prepare($sqlValid);
+                $resultado->execute();
+                $existCita = $resultado->fetchObject();
+                // $nombreCompleto = $cliente->apellido_paterno . ' ' . $cliente->apellido_materno . ' , ' . $cliente->nombres;
+
+                if ( !empty($existCita) ) {
+                    // var_dump('entroo');
+                    // $errors = $validator->getErrors();
+                    return $response->withStatus(400)->withJson([
+                        'error' => true, 
+                        'message' => 'No puedes reservar otra cita en el mismo día y para la misma especialidad.'
+                    ]);
+                }
+            }
+            // exit();
+            
+
+            // Obtener el ultimo registro de SS_CC_Cita
+            $sql = "SELECT max ( SS_CC_Cita.IdCita ) id FROM SS_CC_Cita";
+            $resultado = $this->app->dblib->prepare($sql);
+            $resultado->execute();
+            $res = $resultado->fetchAll();
+            $IdCita = (int)$res[0]['id'] + 1;
 
             $sql = "INSERT INTO cita (
                 idcliente,
@@ -173,7 +230,8 @@ class Cita
                 hora_inicio,
                 hora_fin,
                 medico,
-                especialidad
+                especialidad,
+                idcitaspring
             ) VALUES (
                 :idcliente,
                 :idgarante,
@@ -182,7 +240,8 @@ class Cita
                 :hora_inicio,
                 :hora_fin,
                 :medico,
-                :especialidad
+                :especialidad,
+                :idcitaspring
             )";
 
             $resultado = $this->app->db->prepare($sql);
@@ -194,10 +253,10 @@ class Cita
             $resultado->bindParam(':hora_fin',$hora_fin);
             $resultado->bindParam(':medico',$medico);
             $resultado->bindParam(':especialidad',$especialidad);
+            $resultado->bindParam(':idcitaspring',$IdCita);
 
             $resultado->execute();
 
-            // REGISTRO EN SQL SERVER
             $sql = "
                 SELECT
                     cl.idcliente,
@@ -268,7 +327,9 @@ class Cita
                         IndicadorAutogenerado,
                         TipoDocumento,
                         Documento,
-                        TipoPersona
+                        TipoPersona,
+                        Celular,
+                        CorreoElectronico
                     ) VALUES (
                         $IdPaciente,
                         '".$nombreCompleto."',
@@ -279,18 +340,20 @@ class Cita
                         '".$cliente->apellido_materno."',
                         '".$cliente->nombres."',
                         '".$nombreCompleto."',
-                        '".date('d-m-Y', strtotime($cliente->fecha_nacimiento))."',
+                        '".date('Y-m-d', strtotime($cliente->fecha_nacimiento))."',
                         '".$cliente->sexo."',
                         'S',
                         'S',
                         'N',
                         'A',
                         '',
-                        '" . date('d-m-Y H:i:s') ."',
+                        '" . date('Y-m-d H:i:s') ."',
                         1,
                         'D',
                         '".$cliente->numero_documento."',
-                        'N'
+                        'N',
+                        '".$cliente->telefono."',
+                        '".$cliente->correo."'
                     );
                 ";
                 $resultado = $this->app->dblib->prepare($sql);
@@ -312,12 +375,12 @@ class Cita
                         $IdPaciente,
                         2,
                         'AC',
-                        '" . date('d-m-Y H:i:s') ."',
+                        '" . date('Y-m-d H:i:s') ."',
                         2,
                         'RCORTEZ',
-                        '" . date('d-m-Y H:i:s') ."',
+                        '" . date('Y-m-d H:i:s') ."',
                         '',
-                        '" . date('d-m-Y H:i:s') ."'
+                        '" . date('Y-m-d H:i:s') ."'
                     );
                 ";
 
@@ -326,14 +389,8 @@ class Cita
             }
 
             // REGISTRO DE CITA EN SQL SERVER
-            // Obtener el ultimo registro de SS_CC_Cita
-            $sql = "SELECT max ( SS_CC_Cita.IdCita ) id FROM SS_CC_Cita";
-            $resultado = $this->app->dblib->prepare($sql);
-            $resultado->execute();
-            $res = $resultado->fetchAll();
-            $IdCita = (int)$res[0]['id'] + 1;
             // $fecha_cita = $fecha_cita . ' ' . $hora_inicio;
-            $fecha_cita = date('d-m-Y', strtotime($fecha_cita)) . ' ' . $hora_inicio;
+            $fecha_cita = date('Y-m-d', strtotime($fecha_cita)) . ' ' . $hora_inicio;
             // Registro de SS_CC_Cita
             $sql = "INSERT INTO SS_CC_Cita(
                 IdCita,
@@ -382,9 +439,9 @@ class Cita
                 0,
                 2,
                 '',
-                '" . date('d-m-Y H:i:s') ."',
+                '" . date('Y-m-d H:i:s') ."',
                 '',
-                '" . date('d-m-Y H:i:s') ."',
+                '" . date('Y-m-d H:i:s') ."',
                 1,
                 1,
                 1,
@@ -393,7 +450,7 @@ class Cita
                 '$fecha_cita',
                 NULL,
                 NULL,
-                1,
+                2,
                 NULL);
             ";
             $resultado = $this->app->dblib->prepare($sql);
@@ -404,7 +461,7 @@ class Cita
             VALUES(
                 $IdCita,
                 1,
-                '" . date('d-m-Y H:i:s') ."',
+                '" . date('Y-m-d H:i:s') ."',
                 NULL,
                 '',
                 2,
@@ -412,20 +469,67 @@ class Cita
                 1,
                 NULL,
                 2,
-                '','" . date('d-m-Y H:i:s') ."',
-                '','" . date('d-m-Y H:i:s') ."'
+                '','" . date('Y-m-d H:i:s') ."',
+                '','" . date('Y-m-d H:i:s') ."'
                 )
             ";
             $resultado = $this->app->dblib->prepare($sql);
             $resultado->execute();
 
+            $fromAlias = 'Clínica Providencia';
+            $asunto = '¡Ha reservado su cita correctamente! - Clínica Providencia';
+            $mensaje = '<html lang="es">';
+            $mensaje .= '<body style="font-family: sans-serif;" >';
+              $mensaje .= '<div style="align-content: center;">';
+                $mensaje .= '<div class="header-page" style="background-color:#00386c;padding: 0.75rem;">';
+                  $mensaje .= '<img style="width: 175px;" src="http://104.131.176.122/mailing-providencia/logo_alt.png" />';
+                $mensaje .= '</div>';
+                $mensaje .= '<div class="content-page" style="background-color:#e9f1f5;padding:1.5rem 3rem;">';
+                  $mensaje .= '<div style="font-size:16px;max-width: 600px;display: inline-block;">';
+                    $mensaje .= '<h2 style="margin: 0;color: #739525;margin-bottom: 1.75rem;"> <strong style="color:#00386c;">'.strtoupper($cliente->nombres).',</strong> <br> ha reservado su cita en línea de manera correcta.</h2>';
+                    $mensaje .= '<div style="font-size:16px;color: #777777;"> Gracias por su confianza y preferencia. A continuación le brindamos los datos de su cita médica: <br /> <br /> ';
+                      $mensaje .= '<table style="width:100%;color: #777777;">';
+                        $mensaje .= '<tr><td><b>FECHA DE CITA:</b></td><td>'.date('d-m-Y', strtotime($fecha_cita)).'</td></tr>';
+                        $mensaje .= '<tr><td><b>HORA:</b></td><td>'.$hora_inicio.'</td></tr>';
+                        $mensaje .= '<tr><td><b>ESPECIALIDAD:</b></td><td>'.$especialidad.'</td></tr>';
+                        $mensaje .= '<tr><td><b>MÉDICO:</b></td><td>'.$medico.'</td></tr>';
+                        // $mensaje .= '<tr><td>CMP</td><td>17:30</td></tr>';
+                      $mensaje .= '</table>';
+                      $mensaje .= '<p>No olvides seguir usando nuestro canal online desde el siguiente link:</p>';
+                      $mensaje .= '<a style="padding: 0.5rem;display:inline-block;background-color:#00386c;color:white;text-decoration: none;border-radius: 5px;" href="'.FRONT_URL.'">ACCEDER</a>';
+                      $mensaje .= '<p style="font-style: italic;font-size: 13px;"><strong>IMPORTANTE:</strong>Si deseas cancelar la cita, puedes hacerlo desde nuestro canal online accediendo a: <a target="_blank" href="http://citasenlinea.clinicaprovidencia.pe/#/">http://citasenlinea.clinicaprovidencia.pe/#/</a></p>';
+                    $mensaje .= '</div>';
+                  $mensaje .= '</div>';
+                  $mensaje .= '<div style="display: inline-block;"><img style="width:260px;" src="http://104.131.176.122/mailing-providencia/doctor_edificio.png" /></div>';
+                $mensaje .= '</div>';
+              $mensaje .=  '</div>';
+            $mensaje .= '</body>';
+            $mensaje .= '</html>';
+
+            $mail = new PHPMailer();
+            $mail->IsSMTP(true);
+            $mail->SMTPAuth = true;
+            $mail->SMTPDebug = false;
+            $mail->SMTPSecure = SMTP_SECURE;
+            $mail->Host = SMTP_HOST;
+            $mail->Port = SMTP_PORT;
+            $mail->Username =  SMTP_USERNAME;
+            $mail->Password = SMTP_PASSWORD;
+            $mail->SetFrom(SMTP_USERNAME,$fromAlias);
+            $mail->AddReplyTo(SMTP_USERNAME,$fromAlias);
+            $mail->Subject = $asunto;
+            $mail->IsHTML(true);
+            $mail->AltBody = $mensaje;
+            $mail->MsgHTML($mensaje);
+            $mail->CharSet = 'UTF-8';
+            $mail->AddAddress($cliente->correo);
+            $mail->Send();
             return $response->withJson([
                 'flag' => 1,
                 'message' => "El registro fue satisfactorio."
             ]);
-
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => "Error al registrar cita.",
                 'error' => $th
@@ -482,7 +586,6 @@ class Cita
     }
     public function registrar_pago(Request $request, Response $response)
     {
-        // require __DIR__.'/../culqi.php';
         try {
             $config = $this->app->get('settings')['culqi'];
             $culqi = new Culqi(array('api_key' => $config['CULQI_PRIVATE_KEY']));
@@ -499,18 +602,18 @@ class Cita
 
             $charge = $culqi->Charges->create(
                 array(
-                    "amount" 		=> $monto_cita,
+                    "amount"        => $monto_cita,
                     "currency_code" => "PEN",
-                    "email" 		=> 'rguevara@villasalud.pe',
-                    "description" 	=> 'Citas Web',
-                    "installments" 	=> 0,
-                    "source_id" 	=> $token,
-                    "metadata" 		=> array(
+                    "email"         => 'rguevara@villasalud.pe',
+                    "description"   => 'Citas Web',
+                    "installments"  => 0,
+                    "source_id"     => $token,
+                    "metadata"      => array(
                                         "idcita" => $idcita,
                                         "idusuario" => $idusuario
                     )
                 )
-			);
+            );
 
             $datos_cargo = get_object_vars($charge);
             // print($datos_cargo);
@@ -556,6 +659,18 @@ class Cita
         try {
             $idcita  = $request->getParam('idcita');
             $fechaAnulacion  = date('Y-m-d H:i:s');
+            // obtenemos cita
+            $sqlCita = "
+                SELECT
+                    ci.idcita, ci.idcitaspring
+                FROM cita AS ci
+                WHERE ci.idcita = :idcita
+                LIMIT 1
+            ";
+            $resultado = $this->app->db->prepare($sqlCita);
+            $resultado->bindParam(":idcita", $idcita);
+            $resultado->execute();
+            $fCita = $resultado->fetchObject();
 
             $sql = "UPDATE cita SET
                 estado_cita = 0,
@@ -575,9 +690,9 @@ class Cita
                 Estado = 1,
                 IdCitaRelacionada = null,
                 UsuarioModificacion = 'BFERREYROS',
-                MotivoAnulacion = 'CANCELACION',
-                FechaModificacion = '" . date('d-m-Y H:i:s') ."'
-            WHERE SS_CC_Cita.IdCita = $idcita
+                MotivoAnulacion = 'CANCELADO POR EL USUARIO(WEB)',
+                FechaModificacion = '" . date('Y-m-d H:i:s') ."'
+            WHERE SS_CC_Cita.IdCita = $fCita->idcitaspring
             ";
             $resultado = $this->app->dblib->prepare($ms_sql);
             $resultado->execute();
@@ -585,7 +700,7 @@ class Cita
             /**Registro cita_control */
             $ms_sql = "SELECT MAX ( SS_CC_CitaControl.Secuencial ) AS secuencial
             FROM SS_CC_CitaControl WITH ( NOLOCK )
-            WHERE SS_CC_CitaControl.IdDocumento = $idcita";
+            WHERE SS_CC_CitaControl.IdDocumento = $fCita->idcitaspring";
 
             $resultado = $this->app->dblib->prepare($ms_sql);
             $resultado->execute();
@@ -594,9 +709,9 @@ class Cita
 
             $ms_sql = "INSERT INTO SS_CC_CitaControl
             VALUES(
-                $idcita,
+                $fCita->idcitaspring,
                 $secuencial,
-                '" . date('d-m-Y H:i:s') ."',
+                '" . date('Y-m-d H:i:s') ."',
                 NULL,
                 'BFERREYROS',
                 5,
@@ -605,9 +720,9 @@ class Cita
                 NULL,
                 2,
                 'BFERREYROS',
-                '" . date('d-m-Y H:i:s') ."',
+                '" . date('Y-m-d H:i:s') ."',
                 'BFERREYROS',
-                '" . date('d-m-Y H:i:s') ."'
+                '" . date('Y-m-d H:i:s') ."'
 
             )";
             $resultado = $this->app->dblib->prepare($ms_sql);
@@ -666,6 +781,7 @@ class Cita
                     SS_GE_Especialidad esp
                 WHERE
                     esp.Estado = 2
+                    AND esp.IndicadorWeb = 2 
                 ORDER BY esp.Descripcion ASC
             ";
             $resultado = $this->app->dblib->prepare($sql);
@@ -702,7 +818,6 @@ class Cita
                 'message' => $th->getMessage()
             ]);
         }
-
     }
     /**
      * Carga medicos segun la especialidad elegida
@@ -721,15 +836,15 @@ class Cita
             $idusuario = $user->idusuario;
 
             // VALIDACIONES
-                $validator = $this->app->validator->validate($request, [
-                    'periodo'           => V::notBlank()->digit(), //
-                    'idespecialidad'    => V::notBlank()->digit()
-                ]);
+            $validator = $this->app->validator->validate($request, [
+                'periodo'           => V::notBlank()->digit(), //
+                'idespecialidad'    => V::notBlank()->digit()
+            ]);
 
-                if ( !$validator->isValid() ) {
-                    $errors = $validator->getErrors();
-                    return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
-                }
+            if ( !$validator->isValid() ) {
+                $errors = $validator->getErrors();
+                return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
+            }
 
             $periodo        = $request->getParam('periodo');
             $idespecialidad = $request->getParam('idespecialidad');
@@ -748,19 +863,19 @@ class Cita
                 LEFT JOIN EmpleadoMast empl ON hor.Medico = empl.Empleado
                 LEFT JOIN SS_GE_GrupoConsultorio cons ON hor.IdConsultorio = cons.IdConsultorio
                 WHERE hor.Periodo = " . $periodo . "
-					AND hor.Estado = 2
-					AND empl.Estado = 'A'
-					AND per.Estado = 'A'
-					AND (
-							( hor.IdEspecialidad = " . $idespecialidad . "
-								AND  cons.IdGrupoAtencion = 1 AND
-								serv.IdServicio = 1
-							) OR
-							( hor.IndicadorCompartido = 2 AND
-								hor.IdGrupoAtencionCompartido = 1 AND
-								hor.IdEspecialidad = " . $idespecialidad . "
-							)
-						)
+                    AND hor.Estado = 2
+                    AND empl.Estado = 'A'
+                    AND per.Estado = 'A'
+                    AND (
+                            ( hor.IdEspecialidad = " . $idespecialidad . "
+                                AND  cons.IdGrupoAtencion = 1 AND
+                                serv.IdServicio = 1
+                            ) OR
+                            ( hor.IndicadorCompartido = 2 AND
+                                hor.IdGrupoAtencionCompartido = 1 AND
+                                hor.IdEspecialidad = " . $idespecialidad . "
+                            )
+                        )
                     ORDER BY NombreCompleto ASC
             ";
 
@@ -776,11 +891,11 @@ class Cita
                 $message = "No se encontraron médicos para la busqueda; intente seleccionando otras fechas.";
                 $flag = 0;
             }
-			$data = array();
+            $data = array();
             foreach ($lista as $row) {
                 array_push($data,
                     array(
-                        'idmedico'    		=> $row['Medico'],
+                        'idmedico'          => $row['Medico'],
                         'descripcion'       => iconv("windows-1252", "utf-8", $row['NombreCompleto']),
                         'idespecialidad'    => $row['IdEspecialidad']
                     )
@@ -803,10 +918,9 @@ class Cita
         } catch (\Exception $th) {
             return $response->withStatus(400)->withJson([
                 'flag' => 0,
-                'message' => 'Ocurrió un error al cargar los medicos'
+                'message' => 'Ocurrió un error al cargar los medicos ('.$th->getMessage().')'
             ]);
         }
-
     }
     /**
      * Carga las citas pendientes de pago tanto del titular como de los familiares del usuario logueado
@@ -827,7 +941,7 @@ class Cita
                 SELECT c.*
                 FROM(
                     SELECT
-                        LPAD(cit.idcita,6,0) AS identificador, -- ME QUEDE AQUI, CAMBIAR ESTE CODIGOOOOOOOOOO
+                        LPAD(cit.idcita,6,0) AS identificador, 
                         cit.idcita,
                         cit.idcliente,
                         cit.fecha_cita,
@@ -847,7 +961,7 @@ class Cita
                     JOIN cita cit ON cl.idcliente = cit.idcliente
                     WHERE us.idusuario = :idusuario
                     AND cit.estado_cita IN (1,2)
-                    -- AND cit.fecha_cita >= NOW()
+                    AND cit.fecha_cita >= NOW()
                     UNION ALL
                     SELECT
                         LPAD(cit.idcita,6,0) AS identificador,
@@ -872,7 +986,7 @@ class Cita
                     JOIN cita cit ON fam.idcliente = cit.idcliente
                     WHERE us.idusuario = :idusuario
                     AND cit.estado_cita IN (1,2)
-                    -- AND cit.fecha_cita >= NOW()
+                    AND cit.fecha_cita >= NOW()
                 ) AS c
                 ORDER BY c.fecha_cita DESC
                 LIMIT 10
@@ -903,6 +1017,7 @@ class Cita
                 //     ),
                 //     'sha512'
                 // );
+                $arrData[$key]['mes'] = $this->convertir_mes($arrData[$key]['mes']);
                 $arrData[$key]['acquirerId'] = $configPayme['acquirerId'];
                 $arrData[$key]['idCommerce'] = $configPayme['idCommerce'];
                 $arrData[$key]['purchaseOperationNumber'] = $row['identificador'];
@@ -1136,34 +1251,52 @@ class Cita
             $idespecialidad = $request->getParam('idespecialidad');
             $idmedico       = $request->getParam('idmedico');
 
-            $sql = "SELECT DISTINCT
-                    hor.FechaInicio
-                FROM SS_CC_Horario hor
-                LEFT JOIN SS_GE_Servicio serv ON hor.IdServicio = serv.IdServicio
-                LEFT JOIN SS_GE_GrupoConsultorio gc ON gc.IdConsultorio = hor.IdConsultorio
-                WHERE hor.Periodo = " . $periodo . "
-                AND hor.Medico = " . $idmedico . "
+            $sql = "SELECT 
+                    SS_CC_Horario.IdHorario,
+                    SS_CC_Horario.FechaInicio,  
+                    SS_CC_Horario.FechaFin,  
+                    SS_CC_Horario.TipoRegistroHorario,  
+                    SS_CC_Horario.IndicadorLunes,  
+                    SS_CC_Horario.IndicadorMartes,  
+                    SS_CC_Horario.IndicadorMiercoles,  
+                    SS_CC_Horario.IndicadorJueves,  
+                    SS_CC_Horario.IndicadorViernes,  
+                    SS_CC_Horario.IndicadorSabado,  
+                    SS_CC_Horario.IndicadorDomingo  
+                 FROM SS_CC_Horario WITH(NOLOCK)  
+                 WHERE SS_CC_Horario.Medico = " . $idmedico . " 
+                 AND SS_CC_Horario.Periodo = " . $periodo . " 
+                 AND SS_CC_Horario.IdServicio = 1 
+                 AND SS_CC_Horario.IdEspecialidad = " . $idespecialidad . " 
+                 AND SS_CC_Horario.Estado = 2";
 
-                AND hor.Estado = 2
-                AND hor.IdEspecialidad = " . $idespecialidad . "
-                AND hor.IdTurno IN (1,2)
-                AND (
-                        ( hor.IdEspecialidad = " . $idespecialidad . " AND
-                        gc.IdGrupoAtencion = 1 AND
-                        serv.IdServicio = 1
-                        ) OR
-                        ( hor.IndicadorCompartido = 2 AND
-                        hor.IdGrupoAtencionCompartido = 1 AND
-                        hor.IdEspecialidad = " . $idespecialidad . "
-                        )
-                    )
-                ORDER BY hor.FechaInicio
+            // $sql = "SELECT DISTINCT
+            //         hor.FechaInicio
+            //     FROM SS_CC_Horario hor
+            //     LEFT JOIN SS_GE_Servicio serv ON hor.IdServicio = serv.IdServicio
+            //     LEFT JOIN SS_GE_GrupoConsultorio gc ON gc.IdConsultorio = hor.IdConsultorio
+            //     WHERE hor.Periodo = " . $periodo . "
+            //     AND hor.Medico = " . $idmedico . "
 
-            ";
+            //     AND hor.Estado = 2
+            //     AND hor.IdEspecialidad = " . $idespecialidad . "
+            //     AND hor.IdTurno IN (1,2)
+            //     AND (
+            //             ( hor.IdEspecialidad = " . $idespecialidad . " AND
+            //             gc.IdGrupoAtencion = 1 AND
+            //             serv.IdServicio = 1
+            //             ) OR
+            //             ( hor.IndicadorCompartido = 2 AND
+            //             hor.IdGrupoAtencionCompartido = 1 AND
+            //             hor.IdEspecialidad = " . $idespecialidad . "
+            //             )
+            //         )
+            //     ORDER BY hor.FechaInicio
+            // ";
 
             $resultado = $this->app->dblib->prepare($sql);
-            // $resultado->bindParam(':periodo', $periodo);
-            // $resultado->bindParam(':idespecialidad', $idespecialidad);
+            // $resultado->bindParam(':periodo', $periodo); 
+            // $resultado->bindParam(':idespecialidad', $idespecialidad); 
 
             $resultado->execute();
             if ($lista = $resultado->fetchAll()) {
@@ -1173,6 +1306,68 @@ class Cita
                 $message = "No tiene fechas programadas";
                 $flag = 0;
             }
+            // preparar data de fechas programadas
+            $arrListaPreparada = array();
+            // $arrFechasTotales = array();
+            // var_dump(date("t-m-Y"),'fechas');
+            foreach ($lista as $key => $row) {
+                $desdeAux = date("d-m-Y", strtotime($row['FechaInicio']));
+                $hastaAux = date("d-m-Y", strtotime($row['FechaFin']));
+                $arrRangoAux = $this->get_rango_fechas($desdeAux,$hastaAux,true);
+                $lista[$key]['fechas'] = $arrRangoAux;
+                // array_push($arrFechasTotales, array(
+                //     'IdHorario'=> $row['IdHorario'],
+                //     'fechas'=> $arrRangoAux
+                // ));
+            }
+            foreach ($lista as $key => $row) {
+                foreach ($row['fechas'] as $key => $value) {
+                    $diaSemana = date("w", strtotime($value));
+                    if($row['IndicadorLunes'] == 2 && $diaSemana == 1){
+                        array_push($arrListaPreparada, array(
+                            'IdHorario'=> $row['IdHorario'],
+                            'fecha'=> $value,
+                            'indicador'=> NULL
+                        ));
+                    }
+                    if($row['IndicadorMartes'] == 2 && $diaSemana == 2){
+                        array_push($arrListaPreparada, array(
+                            'IdHorario'=> $row['IdHorario'],
+                            'fecha'=> $value,
+                            'indicador'=> NULL
+                        ));
+                    }
+                    if($row['IndicadorMiercoles'] == 2 && $diaSemana == 3){
+                        array_push($arrListaPreparada, array(
+                            'IdHorario'=> $row['IdHorario'],
+                            'fecha'=> $value,
+                            'indicador'=> NULL
+                        ));
+                    }
+                    if($row['IndicadorJueves'] == 2 && $diaSemana == 4){
+                        array_push($arrListaPreparada, array(
+                            'IdHorario'=> $row['IdHorario'],
+                            'fecha'=> $value,
+                            'indicador'=> NULL
+                        ));
+                    }
+                    if($row['IndicadorViernes'] == 2 && $diaSemana == 5){
+                        array_push($arrListaPreparada, array(
+                            'IdHorario'=> $row['IdHorario'],
+                            'fecha'=> $value,
+                            'indicador'=> NULL
+                        ));
+                    }
+                    if($row['IndicadorSabado'] == 2 && $diaSemana == 6){
+                        array_push($arrListaPreparada, array(
+                            'IdHorario'=> $row['IdHorario'],
+                            'fecha'=> $value,
+                            'indicador'=> NULL
+                        ));
+                    }
+                }
+            }
+            // var_dump('<pre>',$arrListaPreparada);
             // generar fechas del mes
             $anio = substr($periodo, 0, 4);
             $mes = substr($periodo, 4, 2);
@@ -1220,8 +1415,10 @@ class Cita
             }
             // generar fechas validas
             foreach ($dataFinal as $key => $row) {
-                foreach ($lista as $rowLista) {
-                    if( $row['fecha'] == date('d-m-Y',strtotime($rowLista['FechaInicio'])) ){
+                $fechaStr = $row['fecha'];
+                $fechaMasDosDias = date('d-m-Y', strtotime('+2 days'));
+                foreach ($arrListaPreparada as $rowLista) {
+                    if( $fechaStr == $rowLista['fecha'] && $fechaStr >= $fechaMasDosDias ){
                         $dataFinal[$key]['valid'] = 'si';
                         $dataFinal[$key]['class'] = ' active';
                     }
@@ -1242,7 +1439,7 @@ class Cita
                 'message' => $message
             ]);
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => $th->getMessage()
             ]);
@@ -1277,14 +1474,17 @@ class Cita
                 ]);
 
                 if ( !$validator->isValid() ) {
-                    $errors = $validator->getErrors();
+                    $errors = $validator->getErrors(); 
                     return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
                 }
 
             $fecha          = $request->getParam('fecha');
             $idespecialidad = $request->getParam('idespecialidad');
             $idmedico       = $request->getParam('idmedico');
-
+            $idhorario       = $request->getParam('idhorario');
+            /* -- WHERE hor.FechaInicio = '" . date('Y-m-d',strtotime($fecha)). "' */
+            /* WHERE hor.IdHorario = " . $idhorario . " */
+            /* WHERE hor.FechaInicio <= '2019-12-26' AND hor.FechaFin >= '2019-12-26' */
             $sql = "SELECT
                     hor.IdHorario,
                     CAST(hor.HoraInicio AS TIME) AS InicioHorario,
@@ -1292,46 +1492,179 @@ class Cita
                     hor.TiempoPromedioAtencion AS Intervalo,
                     ci.IdCita,
                     ci.FechaCita,
-                    CAST(FechaInicio AS DATE) AS Fecha
+                    CAST(FechaInicio AS DATE) AS FechaInicio,
+                    CAST(FechaFin AS DATE) AS FechaFin,
+                    IndicadorLunes,
+                    IndicadorMartes,
+                    IndicadorMiercoles,
+                    IndicadorJueves,
+                    IndicadorViernes,
+                    IndicadorSabado
                 FROM SS_CC_Horario hor
-                LEFT JOIN SS_CC_Cita ci ON hor.IdHorario = ci.IdHorario
-                WHERE hor.FechaInicio = '" . date('d-m-Y',strtotime($fecha)). "'
+                LEFT JOIN SS_CC_Cita ci ON hor.IdHorario = ci.IdHorario AND ci.Estado IN (2)
+                WHERE hor.FechaInicio <= '" . date('Y-m-d',strtotime($fecha)). "' AND hor.FechaFin >= '" . date('Y-m-d',strtotime($fecha)). "'
                 AND hor.Medico = " . $idmedico . "
-
                 AND hor.Estado = 2
                 AND hor.IdEspecialidad = " . $idespecialidad . "
                 AND hor.IdTurno IN (1,2)
-                ORDER BY hor.HoraInicio
-
+                ORDER BY IdTurno ASC
             ";
 
             $resultado = $this->app->dblib->prepare($sql);
             $resultado->execute();
             $arrCitas = array();
+
             if ($lista = $resultado->fetchAll()) {
                 $message = "Se encontraron turnos programados";
                 $flag = 1;
-                $arrListado = array();
-                foreach ($lista as $key => $row) {
-                    $arrListado[$row['IdHorario']] = array(
-                        'IdHorario' => $row['IdHorario'],
-                        'InicioHorario' => $row['InicioHorario'],
-                        'FinHorario' => $row['FinHorario'],
-                        'Intervalo' => $row['Intervalo'],
-                        'Fecha' => $row['Fecha'],
-                        'turnos_ocupados' => array()
-                    );
+                // print_r($lista);
+                /* AGREGAR HORARIOS RESTANTES AL ARRAY */
+                $arrListaTotal = array();
+                foreach($lista as $key => $row) {
+                    $desdeAux = date("d-m-Y", strtotime($row['FechaInicio']));
+                    $hastaAux = date("d-m-Y", strtotime($row['FechaFin']));
+                    print_r($desdeAux,$hastaAux);
+                    $arrRangoAux = $this->get_rango_fechas($desdeAux,$hastaAux,true);
+                    $arrDiasValidos = array();
+                    // foreach ($arrRangoAux as $key => $value) {
+                    //     $diaSemana = date("w", strtotime($value));
+                    //     if($value == ){
+
+                    //     }
+                    // }
+
+
+
+                    foreach ($arrRangoAux as $key => $value) {
+                        $diaSemana = date("w", strtotime($value));
+                        // var_dump($diaSemana, $row['IndicadorLunes'], $row['IndicadorMartes'], $row['IndicadorMiercoles'], $row['IndicadorJueves'], $row['IndicadorViernes'], $row['IndicadorSabado']);
+                        if($row['IndicadorLunes'] == 2 && $diaSemana == 1){
+                            array_push($arrListaTotal, array(
+                                'IdHorario' => $row['IdHorario'],
+                                'InicioHorario' => $row['InicioHorario'],
+                                'FinHorario' => $row['FinHorario'],
+                                'Intervalo' => $row['Intervalo'],
+                                'IdCita' => $row['IdCita'],
+                                'FechaCita' => $row['FechaCita'],
+                                'FechaInicio' => $row['FechaInicio'],
+                                'FechaFin' => $row['FechaFin'],
+                                'IdHorario' => $row['IdHorario'],
+                                'FechaActual' => $value
+                            ));
+                        }
+                        if($row['IndicadorMartes'] == 2 && $diaSemana == 2){
+                            array_push($arrListaTotal, array(
+                                'IdHorario' => $row['IdHorario'],
+                                'InicioHorario' => $row['InicioHorario'],
+                                'FinHorario' => $row['FinHorario'],
+                                'Intervalo' => $row['Intervalo'],
+                                'IdCita' => $row['IdCita'],
+                                'FechaCita' => $row['FechaCita'],
+                                'FechaInicio' => $row['FechaInicio'],
+                                'FechaFin' => $row['FechaFin'],
+                                'IdHorario' => $row['IdHorario'],
+                                'FechaActual' => $value
+                            ));
+                        }
+                        if($row['IndicadorMiercoles'] == 2 && $diaSemana == 3){
+                            array_push($arrListaTotal, array(
+                                'IdHorario' => $row['IdHorario'],
+                                'InicioHorario' => $row['InicioHorario'],
+                                'FinHorario' => $row['FinHorario'],
+                                'Intervalo' => $row['Intervalo'],
+                                'IdCita' => $row['IdCita'],
+                                'FechaCita' => $row['FechaCita'], 
+                                'FechaInicio' => $row['FechaInicio'],
+                                'FechaFin' => $row['FechaFin'],
+                                'IdHorario' => $row['IdHorario'],
+                                'FechaActual' => $value
+                            ));
+                        } 
+                        if($row['IndicadorJueves'] == 2 && $diaSemana == 4){
+                            array_push($arrListaTotal, array(
+                                'IdHorario' => $row['IdHorario'],
+                                'InicioHorario' => $row['InicioHorario'],
+                                'FinHorario' => $row['FinHorario'],
+                                'Intervalo' => $row['Intervalo'],
+                                'IdCita' => $row['IdCita'],
+                                'FechaCita' => $row['FechaCita'],
+                                'FechaInicio' => $row['FechaInicio'],
+                                'FechaFin' => $row['FechaFin'],
+                                'IdHorario' => $row['IdHorario'],
+                                'FechaActual' => $value
+                            ));
+                        }
+                        if($row['IndicadorViernes'] == 2 && $diaSemana == 5){
+                            array_push($arrListaTotal, array(
+                                'IdHorario' => $row['IdHorario'],
+                                'InicioHorario' => $row['InicioHorario'],
+                                'FinHorario' => $row['FinHorario'],
+                                'Intervalo' => $row['Intervalo'],
+                                'IdCita' => $row['IdCita'],
+                                'FechaCita' => $row['FechaCita'],
+                                'FechaInicio' => $row['FechaInicio'],
+                                'FechaFin' => $row['FechaFin'],
+                                'IdHorario' => $row['IdHorario'],
+                                'FechaActual' => $value
+                            ));
+                        }
+                        if($row['IndicadorSabado'] == 2 && $diaSemana == 6){
+                            array_push($arrListaTotal, array(
+                                'IdHorario' => $row['IdHorario'],
+                                'InicioHorario' => $row['InicioHorario'],
+                                'FinHorario' => $row['FinHorario'],
+                                'Intervalo' => $row['Intervalo'],
+                                'IdCita' => $row['IdCita'],
+                                'FechaCita' => $row['FechaCita'],
+                                'FechaInicio' => $row['FechaInicio'],
+                                'FechaFin' => $row['FechaFin'],
+                                'IdHorario' => $row['IdHorario'],
+                                'FechaActual' => $value
+                            ));
+                        }
+                        // array_push($arrListaTotal, array(
+                        //     'IdHorario' => $row['IdHorario'],
+                        //     'InicioHorario' => $row['InicioHorario'],
+                        //     'FinHorario' => $row['FinHorario'],
+                        //     'Intervalo' => $row['Intervalo'],
+                        //     'IdCita' => $row['IdCita'],
+                        //     'FechaCita' => $row['FechaCita'],
+                        //     'FechaInicio' => $row['FechaInicio'],
+                        //     'FechaFin' => $row['FechaFin'],
+                        //     'IdHorario' => $row['IdHorario'],
+                        //     'FechaActual' => $value
+                        // ));
+                    }
+                    // var_dump($arrListaTotal); exit();
                 }
+                // var_dump();
+                // var_dump($fecha);
+                // var_dump(date('Y-m-d',strtotime($fecha)));
+                $arrListado = array();
+                foreach ($arrListaTotal as $key => $row) {
+                    // var_dump($row['FechaActual']);
+                    if( $row['FechaActual'] === $fecha ){ // d-m-Y
+                        $arrListado[$row['IdHorario']] = array(
+                            'IdHorario' => $row['IdHorario'],
+                            'InicioHorario' => $row['InicioHorario'],
+                            'FinHorario' => $row['FinHorario'],
+                            'Intervalo' => $row['Intervalo'],
+                            'FechaActual' => $row['FechaActual'],
+                            'turnos_ocupados' => array()
+                        );
+                    }
+                }
+                // exit();
 
                 foreach ($arrListado as $key => $value) {
-                    foreach ($lista as $row) {
+                    foreach ($arrListaTotal as $row) {
                         if( $row['IdHorario'] == $key ){
                             $arrAux[] = date('Y-m-d H:i',strtotime($row['FechaCita']));
                         }
                     }
                     $arrListado[$key]['turnos_ocupados'] = $arrAux;
                 }
-
+                // print_r($arrListado); 
                 $arrListado = array_values($arrListado);
             }else{
                 $message = "No se encontraron cupos disponibles en esta fecha.";
@@ -1342,19 +1675,23 @@ class Cita
                     'message' => $message
                 ]);
             }
-			$data = array();
-            
-
+            $data = array();
+            // print_r($arrListado);
             foreach ($arrListado as $row) {
+                $rowFechaActual = $row['FechaActual'];
                 $hora_inicio = date('H:i',strtotime($row['InicioHorario']));
                 $i = 1;
                 while ( strtotime($row['FinHorario']) > strtotime($hora_inicio) ) {
                     $hora_fin = date('H:i',(strtotime($hora_inicio) + $row['Intervalo']*60) );
-                    $fecha_inicio = $row['Fecha'] . ' ' . $hora_inicio;
+                    $fecha_inicio = date('Y-m-d',strtotime($rowFechaActual)) . ' ' . $hora_inicio;
+                    // if(  ){
+
+                    // }
                     if( !in_array($fecha_inicio, $row['turnos_ocupados']) ){
 
                         array_push($arrCitas,
                         array(
+                            'fecha_actual'=> $row['FechaActual'],
                             'idhorario' => $row['IdHorario'],
                             'numero_cupo' => $i,
                             'hora_inicio' => $hora_inicio,
@@ -1367,7 +1704,15 @@ class Cita
                     $i++;
                 }
             }
-
+            if( empty($arrCitas) ){
+                $message = "No se encontraron cupos disponibles en esta fecha.";
+                $flag = 0;
+                return $response->withStatus(400)->withJson([
+                    'datos' => $arrCitas,
+                    'flag' => $flag,
+                    'message' => $message
+                ]);
+            }
             return $response->withJson([
                 'datos' => $arrCitas,
                 'flag' => $flag,
@@ -1375,13 +1720,12 @@ class Cita
             ]);
 
         } catch (\Exception $th) {
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
                 'message' => $th->getMessage()
             ]);
         }
     }
-
     private function get_rango_fechas($start, $end, $onlyDate = FALSE) {
         $range = array();
         if (is_string($start) === true) $start = strtotime($start);
@@ -1401,7 +1745,7 @@ class Cita
             if($onlyDate)
                 { $range[] = date('d-m-Y'); }
             else
-                { $range[] = date('d-m-Y H:i:s'); }
+                { $range[] = date('Y-m-d H:i:s'); }
         }
         return $range;
     }
@@ -1413,29 +1757,29 @@ class Cita
         //     $mes_num = $nom_mes;
         //     $mes = NULL;
         // }
-        if ($mes == 'Jan')
+        if ($mes == 'Jan' || $mes == 'JANUARY')
         $resultado = 'ENERO';
-        if ($mes == 'Feb')
+        if ($mes == 'Feb' || $mes == 'FEBRUARY')
         $resultado = 'FEBRERO';
-        if ($mes == 'Mar')
+        if ($mes == 'Mar' || $mes == 'MARCH')
         $resultado = 'MARZO';
-        if ($mes == 'Apr')
+        if ($mes == 'Apr' || $mes == 'APRIL')
         $resultado = 'ABRIL';
-        if ($mes == 'May')
+        if ($mes == 'May' || $mes == 'MAY')
         $resultado = 'MAYO';
-        if ($mes == 'Jun')
+        if ($mes == 'Jun' || $mes == 'JUNE')
         $resultado = 'JUNIO';
-        if ($mes == 'Jul')
+        if ($mes == 'Jul' || $mes == 'JULY')
         $resultado = 'JULIO';
-        if ($mes == 'Aug')
+        if ($mes == 'Aug' || $mes == 'AUGUST')
         $resultado = 'AGOSTO';
-        if ($mes == 'Sep')
+        if ($mes == 'Sep' || $mes == 'SEPTEMBER')
         $resultado = 'SEPTIEMBRE';
-        if ($mes == 'Oct')
+        if ($mes == 'Oct' || $mes == 'OCTOBER')
         $resultado = 'OCTUBRE';
-        if ($mes == 'Nov')
+        if ($mes == 'Nov' || $mes == 'NOVEMBER')
         $resultado = 'NOVIEMBRE';
-        if ($mes == 'Dec')
+        if ($mes == 'Dec' || $mes == 'DECEMBER')
         $resultado = 'DICIEMBRE';
         return @$resultado;
     }

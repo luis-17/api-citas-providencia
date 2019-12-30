@@ -28,12 +28,16 @@ $container['db'] = function ($c) {
     return $pdo;
 };
 
-$container['dblib'] = function ($c) {
+$container['dblib'] = function ($c) { 
     $settings = $c->get('settings')['dblib'];
+    
     // $pdo = new PDO("odbc:Driver=sqlsrv;Server=" . $settings['host'] . "; Database=" . $settings['dbname'], $settings['user'], $settings['pass']);
     // $pdo = new PDO("sqlsrv:Server=" . $settings['host'] . "; Database=" . $settings['dbname'],$settings['user'], $settings['pass']);
     // $pdo = new PDO("dblib:host=190.12.89.170;dbname=SpringTest;", "test", "123456");
+
     $pdo = new PDO($settings['driver'].":host=".$settings['host'].";dbname=".$settings['dbname'].";", $settings['user'], $settings['pass']);
+
+    // $pdo = new PDO("dblib:version=8.0;charset=UTF-8;host=".$settings['host'].";dbname=".$settings['dbname'].";", $settings['user'], $settings['pass']);
     // if($pdo){
     //     echo "Connected!";
     // }
