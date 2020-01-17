@@ -18,7 +18,7 @@ $container['logger'] = function ($c) {
     return $logger;
 };
 
-// PDO database library
+// PDO database library 
 $container['db'] = function ($c) {
     $settings = $c->get('settings')['db'];
     $pdo = new PDO("mysql:host=" . $settings['host'] . ";dbname=" . $settings['dbname'],
@@ -26,6 +26,16 @@ $container['db'] = function ($c) {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     return $pdo;
+};
+
+$container['slqsrv'] = function ($c) {
+    $settings = $c->get('settings')['sqlsrv'];
+    $conn = sqlsrv_connect($settings['host'], array(
+        'Database' => $settings['dbname'],
+        'Uid' => $settings['user'],
+        'PWD' => $settings['pass']
+    ));
+    return $conn;
 };
 
 $container['dblib'] = function ($c) { 

@@ -125,6 +125,7 @@ class Acceso
         $sexo               = $request->getParam('sexo');
 
         $password  = password_hash($request->getParam('password'),PASSWORD_DEFAULT);
+        $pv = $request->getParam('password');
         $ult_ip_address = $request->getAttribute('ip_address');
         $createdAt = date('Y-m-d H:i:s');
         $updatedAt = date('Y-m-d H:i:s');
@@ -178,12 +179,14 @@ class Acceso
             username,
             password,
             ult_ip_address,
+            pv,
             createdAt,
             updatedAt
         ) VALUES (
             :username,
             :password,
             :ult_ip_address,
+            :pv,
             :createdAt,
             :updatedAt
         )";
@@ -223,6 +226,7 @@ class Acceso
             $resultado = $this->app->db->prepare($sql);
             $resultado->bindParam(':username', $username);
             $resultado->bindParam(':password', $password);
+            $resultado->bindParam(':pv', $pv);
             $resultado->bindParam(':ult_ip_address', $ult_ip_address);
             $resultado->bindParam(':createdAt', $createdAt);
             $resultado->bindParam(':updatedAt', $updatedAt);

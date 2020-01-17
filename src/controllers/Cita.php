@@ -14,7 +14,6 @@ class Cita
     public function __construct($app)
     {
         $this->app = $app;
-
     }
     /**
         * Registra la transacción como codigo unico, de tal forma que una cita puede tener varias transacciones pero solo una autorizada.
@@ -138,7 +137,6 @@ class Cita
     {
         try {
             $user = $request->getAttribute('decoded_token_data');
-            // $idcliente = (int)$user->idcliente;
 
             // VALIDACIONES
             $validator = $this->app->validator->validate($request, [
@@ -150,12 +148,9 @@ class Cita
             ]);
 
             if ( !$validator->isValid() ) {
-                // var_dump('entroo');
                 $errors = $validator->getErrors();
                 return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
             }
-
-            // var_dump('salii'); exit();
             $idcliente      = $request->getParam('idcliente');
             $idgarante      = $request->getParam('idgarante');
             $idhorario      = $request->getParam('idhorario');
@@ -169,7 +164,42 @@ class Cita
             $idespecialidad   = $request->getParam('idespecialidad');
             $fecha_registro = date('Y-m-d H:i:s');
 
-            // VALIDAR QUE EL HORARIO ESTE LIBRE EN EL MOMENTO
+            // VALIDAR QUE NO SE PUEDA REGISTRAR UNA CITA EN UN TURNO OCUPADO(importante) 
+            $fechaCitaParaValidar =date('Y-m-d', strtotime($fecha_cita)) . ' ' . $hora_inicio;
+            $sqlValidMultiple = "SELECT TOP 1 ci.IdCita 
+                FROM SS_CC_Cita ci
+                WHERE ci.IdHorario = ".$idhorario." 
+                AND ci.FechaCita = '".$fechaCitaParaValidar."'
+                AND ci.Estado = 2 
+            ";
+            
+
+            $settings = $this->app->get('settings')['sqlsrv'];
+            $conn = sqlsrv_connect($settings['host'], array(
+                'Database' => $settings['dbname'],
+                'Uid' => $settings['user'],
+                'PWD' => $settings['pass']
+            ));
+            if( $conn === false ){
+                throw new Exception(sqlsrv_errors()[0]['message']);
+            }
+            $resultado = sqlsrv_query($conn, $sqlValidMultiple);
+            $arrExistCita = array();
+            while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
+                array_push($arrExistCita, $row);
+            }
+            sqlsrv_free_stmt($resultado);
+            // $resultado = $this->app->dblib->prepare($sqlValidMultiple);
+            // $resultado->execute();
+            // $existCita = $resultado->fetchObject();
+            if ( !empty($arrExistCita) ) {
+                return $response->withStatus(400)->withJson([
+                    'error' => true, 
+                    'message' => 'El cupo: '.$hora_inicio.' ya ha sido tomado por un paciente. Intente con otro horario.'
+                ]);
+            }
+
+            // VALIDAR QUE EL USUARIO NO PUEDA REGISTRAR MULTIPLES CITAS A SU NOMBRE
             $sqlInCita = "
                 SELECT ci.idcita, ci.idcitaspring
                 FROM cita AS ci
@@ -197,30 +227,39 @@ class Cita
                     AND ( ci.IdHorario = '".$idhorario."' OR hor.IdEspecialidad = '".$idespecialidad."' )
                     AND ci.Estado = 2 
                 ";
-                // var_dump($sqlValid,'sqlxd');
-                $resultado = $this->app->dblib->prepare($sqlValid);
-                $resultado->execute();
-                $existCita = $resultado->fetchObject();
-                // $nombreCompleto = $cliente->apellido_paterno . ' ' . $cliente->apellido_materno . ' , ' . $cliente->nombres;
+                $resultado = sqlsrv_query($conn, $sqlValid);
+                $arrExistCita = array();
+                while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
+                    array_push($arrExistCita, $row);
+                }
+                sqlsrv_free_stmt($resultado);
+                // $resultado = $this->app->dblib->prepare($sqlValid);
+                // $resultado->execute();
+                // $existCita = $resultado->fetchObject();
 
-                if ( !empty($existCita) ) {
-                    // var_dump('entroo');
-                    // $errors = $validator->getErrors();
+                if ( !empty($arrExistCita) ) {
                     return $response->withStatus(400)->withJson([
                         'error' => true, 
                         'message' => 'No puedes reservar otra cita en el mismo día y para la misma especialidad.'
                     ]);
                 }
             }
-            // exit();
             
 
             // Obtener el ultimo registro de SS_CC_Cita
             $sql = "SELECT max ( SS_CC_Cita.IdCita ) id FROM SS_CC_Cita";
-            $resultado = $this->app->dblib->prepare($sql);
-            $resultado->execute();
-            $res = $resultado->fetchAll();
-            $IdCita = (int)$res[0]['id'] + 1;
+            $resultado = sqlsrv_query($conn, $sql);
+            $fCita = array();
+            while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
+                $fCita = array(
+                    'id' => $row['id']
+                );
+            }
+            sqlsrv_free_stmt($resultado);
+            // $resultado = $this->app->dblib->prepare($sql);
+            // $resultado->execute();
+            // $res = $resultado->fetchAll();
+            $IdCita = (int)$fCita['id'] + 1;
 
             $sql = "INSERT INTO cita (
                 idcliente,
@@ -291,19 +330,36 @@ class Cita
                         AND cli.DocumentoIdentidad = '". $cliente->numero_documento ."' )
                         OR ( cli.TipoDocumento ='D' AND cli.Documento = '". $cliente->numero_documento ."' )
             ";
-            $resultado = $this->app->dblib->prepare($sql);
-            $resultado->execute();
-            $res = $resultado->fetchAll();
-            if( count($res) > 0 ){
-                $paciente = $res[0];
-                $IdPaciente = $paciente['IdPaciente'];
+            $resultado = sqlsrv_query($conn, $sql);
+            $fCliente = array();
+            while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
+                $fCliente = array(
+                    'IdPaciente' => $row['IdPaciente']
+                );
+            }
+            sqlsrv_free_stmt($resultado);
+            // $resultado = $this->app->dblib->prepare($sql);
+            // $resultado->execute();
+            // $res = $resultado->fetchAll();
+            $IdPaciente = null;
+            if( !empty($fCliente) ){
+                // $paciente = $res[0];
+                $IdPaciente = $fCliente['IdPaciente'];
             }else{
                 // Obtener el ultimo registro de PersonaMast
                 $sql = "SELECT max ( PersonaMast.Persona ) id FROM PersonaMast ";
-                $resultado = $this->app->dblib->prepare($sql);
-                $resultado->execute();
-                $res = $resultado->fetchAll();
-                $IdPaciente = (int)$res[0]['id'] + 1;
+                $resultado = sqlsrv_query($conn, $sql);
+                $fCliente = array();
+                while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
+                    $fCliente = array(
+                        'id' => $row['id']
+                    );
+                }
+                sqlsrv_free_stmt($resultado);
+                // $resultado = $this->app->dblib->prepare($sql);
+                // $resultado->execute();
+                // $res = $resultado->fetchAll();
+                $IdPaciente = (int)$fCliente['id'] + 1;
 
                 // Registro de PersonaMast
                 $sql = "INSERT INTO PersonaMast (
@@ -356,8 +412,10 @@ class Cita
                         '".$cliente->correo."'
                     );
                 ";
-                $resultado = $this->app->dblib->prepare($sql);
-                $resultado->execute();
+                $resultado = sqlsrv_query($conn, $sql);
+                sqlsrv_free_stmt($resultado);
+                // $resultado = $this->app->dblib->prepare($sql);
+                // $resultado->execute();
 
                 // Registro de SS_GE_Paciente
                 $sql = " INSERT INTO SS_GE_Paciente (
@@ -383,13 +441,13 @@ class Cita
                         '" . date('Y-m-d H:i:s') ."'
                     );
                 ";
-
-                $resultado = $this->app->dblib->prepare($sql);
-                $resultado->execute();
+                $resultado = sqlsrv_query($conn, $sql);
+                sqlsrv_free_stmt($resultado);
+                // $resultado = $this->app->dblib->prepare($sql);
+                // $resultado->execute();
             }
 
             // REGISTRO DE CITA EN SQL SERVER
-            // $fecha_cita = $fecha_cita . ' ' . $hora_inicio;
             $fecha_cita = date('Y-m-d', strtotime($fecha_cita)) . ' ' . $hora_inicio;
             // Registro de SS_CC_Cita
             $sql = "INSERT INTO SS_CC_Cita(
@@ -453,8 +511,10 @@ class Cita
                 2,
                 NULL);
             ";
-            $resultado = $this->app->dblib->prepare($sql);
-            $resultado->execute();
+            $resultado = sqlsrv_query($conn, $sql);
+            sqlsrv_free_stmt($resultado);
+            // $resultado = $this->app->dblib->prepare($sql);
+            // $resultado->execute();
 
             // Registro de Cita Control
             $sql = "INSERT INTO SS_CC_CitaControl
@@ -473,8 +533,10 @@ class Cita
                 '','" . date('Y-m-d H:i:s') ."'
                 )
             ";
-            $resultado = $this->app->dblib->prepare($sql);
-            $resultado->execute();
+            $resultado = sqlsrv_query($conn, $sql);
+            sqlsrv_free_stmt($resultado);
+            // $resultado = $this->app->dblib->prepare($sql);
+            // $resultado->execute();
 
             $fromAlias = 'Clínica Providencia';
             $asunto = '¡Ha reservado su cita correctamente! - Clínica Providencia';
@@ -681,9 +743,22 @@ class Cita
             $resultado = $this->app->db->prepare($sql);
             $resultado->bindParam(':fechaAnulacion', $fechaAnulacion);
             $resultado->execute();
-
+            $settings = $this->app->get('settings')['sqlsrv'];
+            $conn = sqlsrv_connect($settings['host'], array(
+                'Database' => $settings['dbname'],
+                'Uid' => $settings['user'],
+                'PWD' => $settings['pass']
+            ));
+            if( $conn === false ){
+                throw new Exception(sqlsrv_errors()[0]['message']);
+            }
+            
+            // $arrExistCita = array();
+            // while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
+            //     array_push($arrExistCita, $row);
+            // }
+            
             /**Anulacion de cita en SQL Server */
-
             $ms_sql = "UPDATE SS_CC_Cita
             SET EstadoDocumento = 5,
                 EstadoDocumentoAnterior = 2,
@@ -694,18 +769,28 @@ class Cita
                 FechaModificacion = '" . date('Y-m-d H:i:s') ."'
             WHERE SS_CC_Cita.IdCita = $fCita->idcitaspring
             ";
-            $resultado = $this->app->dblib->prepare($ms_sql);
-            $resultado->execute();
+            $resultado = sqlsrv_query($conn, $ms_sql);
+            sqlsrv_free_stmt($resultado);
+            // $resultado = $this->app->dblib->prepare($ms_sql);
+            // $resultado->execute();
 
             /**Registro cita_control */
             $ms_sql = "SELECT MAX ( SS_CC_CitaControl.Secuencial ) AS secuencial
             FROM SS_CC_CitaControl WITH ( NOLOCK )
             WHERE SS_CC_CitaControl.IdDocumento = $fCita->idcitaspring";
 
-            $resultado = $this->app->dblib->prepare($ms_sql);
-            $resultado->execute();
-            $res = $resultado->fetchAll();
-            $secuencial = (int)$res[0]['secuencial'] + 1;
+            $resultado = sqlsrv_query($conn, $ms_sql);
+            $fCitaCC = array();
+            while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
+                $fCitaCC = array(
+                    'secuencial' => $row['secuencial']
+                );
+            }
+            sqlsrv_free_stmt($resultado);
+            // $resultado = $this->app->dblib->prepare($ms_sql);
+            // $resultado->execute();
+            // $res = $resultado->fetchAll();
+            $secuencial = (int)$fCitaCC[0]['secuencial'] + 1;
 
             $ms_sql = "INSERT INTO SS_CC_CitaControl
             VALUES(
@@ -725,9 +810,10 @@ class Cita
                 '" . date('Y-m-d H:i:s') ."'
 
             )";
-            $resultado = $this->app->dblib->prepare($ms_sql);
-            $resultado->execute();
-
+            $resultado = sqlsrv_query($conn, $ms_sql);
+            sqlsrv_free_stmt($resultado);
+            // $resultado = $this->app->dblib->prepare($ms_sql);
+            // $resultado->execute();
             return $response->withJson([
                 'flag' => 1,
                 'message' => "Se anuló la cita correctamente."
@@ -752,21 +838,6 @@ class Cita
     public function cargar_especialidades(Request $request, Response $response, array $args)
     {
         try {
-
-            // $serverName = "190.12.89.170";
-            // $connectionOptions = array(
-            //     "Database" => "SpringSalud_Produccion_Providencia",
-            //     "Uid" => "test",
-            //     "PWD" => "123456"
-            // );
-            // //Establishes the connection
-            // $conn = sqlsrv_connect($serverName, $connectionOptions);
-            // if($conn){
-            //     echo "Connected!";
-            // }
-            // echo 'Despues de conectar';
-            // return;
-            // echo 'Hola Mundo SQL Server xd';
             $user = $request->getAttribute('decoded_token_data');
 
             $idusuario = $user->idusuario;
@@ -784,37 +855,54 @@ class Cita
                     AND esp.IndicadorWeb = 2 
                 ORDER BY esp.Descripcion ASC
             ";
-            $resultado = $this->app->dblib->prepare($sql);
-            $resultado->execute();
-            if ($lista = $resultado->fetchAll()) {
-                $message = "Se encontraron especialidades";
-                $flag = 1;
-            }else{
-                $message = "No se encontraron especialidades";
-                $flag = 0;
+            $settings = $this->app->get('settings')['sqlsrv'];
+            $conn = sqlsrv_connect($settings['host'], array(
+                'Database' => $settings['dbname'],
+                'Uid' => $settings['user'],
+                'PWD' => $settings['pass']
+            ));
+            if( $conn === false ){
+                throw new Exception(sqlsrv_errors()[0]['message']);
             }
+            $resultado = sqlsrv_query($conn, $sql);
+            // if ($resultado == FALSE){
+            //     $message = "No se encontraron especialidades";
+            //     $flag = 0;
+            // }else{
+            $message = "Se encontraron especialidades"; 
+            $flag = 1;
+
             $data = array();
-            foreach ($lista as $row) {
+            while ($row = sqlsrv_fetch_array($resultado, SQLSRV_FETCH_ASSOC)) {
                 array_push($data,
                     array(
                         'idespecialidad'    => $row['IdEspecialidad'],
-                        'codigo'            => $row['Codigo'],
-                        'descripcion'       => iconv("windows-1252", "utf-8", $row['Descripcion']),
+                        'codigo'            => $row['Codigo'], 
+                        'descripcion'       => $row['Descripcion'], /* iconv("windows-1252", "utf-8", $row['Descripcion']), */
                         'adicionales'       => $row['CantidadCitasAdicional'],
                     )
                 );
             }
-
+            sqlsrv_free_stmt($resultado); 
+            // sqlsrv_close($conn);
+            if (empty($data)){
+                $message = "No se encontraron especialidades";
+                $flag = 0;
+                return $response->withStatus(400)->withJson([
+                    'flag' => 0,
+                    'message' => $message
+                ]);
+            }
             return $response->withJson([
                 'datos' => $data,
                 'flag' => $flag,
                 'message' => $message
             ]);
-
         } catch (\Exception $th) {
             // var_dump($th->getMessage(), 'errorrr');
-            return $response->withJson([
+            return $response->withStatus(400)->withJson([
                 'flag' => 0,
+                // 'message' => 'Ocurrió un error al cargar las especialidades. Inténtelo nuevamente.'
                 'message' => $th->getMessage()
             ]);
         }
@@ -879,27 +967,39 @@ class Cita
                     ORDER BY NombreCompleto ASC
             ";
 
-            $resultado = $this->app->dblib->prepare($sql);
-            // $resultado->bindParam(':periodo', $periodo);
-            // $resultado->bindParam(':idespecialidad', $idespecialidad);
-
-            $resultado->execute();
-            if ($lista = $resultado->fetchAll()) {
-                $message = "Se encontraron médicos para la búsqueda";
-                $flag = 1;
-            }else{
-                $message = "No se encontraron médicos para la busqueda; intente seleccionando otras fechas.";
-                $flag = 0;
+            $settings = $this->app->get('settings')['sqlsrv'];
+            $conn = sqlsrv_connect($settings['host'], array(
+                'Database' => $settings['dbname'],
+                'Uid' => $settings['user'],
+                'PWD' => $settings['pass']
+            ));
+            if( $conn === false ){
+                throw new Exception(sqlsrv_errors()[0]['message']);
             }
+            $resultado = sqlsrv_query($conn, $sql);
+            // if ($resultado == FALSE){
+            //     $message = "No se encontraron médicos para la busqueda; intente seleccionando otras fechas.";
+            //     $flag = 0;
+            // }else{
+            $message = "Se encontraron médicos para la búsqueda"; 
+            $flag = 1;
+            // }
             $data = array();
-            foreach ($lista as $row) {
+            while ($row = sqlsrv_fetch_array($resultado, SQLSRV_FETCH_ASSOC)) {
                 array_push($data,
                     array(
                         'idmedico'          => $row['Medico'],
-                        'descripcion'       => iconv("windows-1252", "utf-8", $row['NombreCompleto']),
+                        // 'descripcion'       => iconv("windows-1252", "utf-8", $row['NombreCompleto']),
+                        'descripcion'       => $row['NombreCompleto'],
                         'idespecialidad'    => $row['IdEspecialidad']
                     )
                 );
+            }
+            sqlsrv_free_stmt($resultado);
+            // sqlsrv_close($conn);
+            if (empty($data)) {
+                $message = "No se encontraron médicos para la busqueda; intente seleccionando otras fechas.";
+                $flag = 0;
             }
             if($flag === 1){
                 return $response->withJson([
@@ -914,11 +1014,11 @@ class Cita
                 'flag' => $flag,
                 'message' => $message
             ]);
-
         } catch (\Exception $th) {
             return $response->withStatus(400)->withJson([
                 'flag' => 0,
-                'message' => 'Ocurrió un error al cargar los medicos ('.$th->getMessage().')'
+                // 'message' => 'Ocurrió un error al cargar los medicos. Inténtelo nuevamente.'
+                'message' => $th->getMessage()
             ]);
         }
     }
@@ -1262,7 +1362,7 @@ class Cita
                     SS_CC_Horario.IndicadorJueves,  
                     SS_CC_Horario.IndicadorViernes,  
                     SS_CC_Horario.IndicadorSabado,  
-                    SS_CC_Horario.IndicadorDomingo  
+                    SS_CC_Horario.IndicadorDomingo
                  FROM SS_CC_Horario WITH(NOLOCK)  
                  WHERE SS_CC_Horario.Medico = " . $idmedico . " 
                  AND SS_CC_Horario.Periodo = " . $periodo . " 
@@ -1270,55 +1370,38 @@ class Cita
                  AND SS_CC_Horario.IdEspecialidad = " . $idespecialidad . " 
                  AND SS_CC_Horario.Estado = 2";
 
-            // $sql = "SELECT DISTINCT
-            //         hor.FechaInicio
-            //     FROM SS_CC_Horario hor
-            //     LEFT JOIN SS_GE_Servicio serv ON hor.IdServicio = serv.IdServicio
-            //     LEFT JOIN SS_GE_GrupoConsultorio gc ON gc.IdConsultorio = hor.IdConsultorio
-            //     WHERE hor.Periodo = " . $periodo . "
-            //     AND hor.Medico = " . $idmedico . "
-
-            //     AND hor.Estado = 2
-            //     AND hor.IdEspecialidad = " . $idespecialidad . "
-            //     AND hor.IdTurno IN (1,2)
-            //     AND (
-            //             ( hor.IdEspecialidad = " . $idespecialidad . " AND
-            //             gc.IdGrupoAtencion = 1 AND
-            //             serv.IdServicio = 1
-            //             ) OR
-            //             ( hor.IndicadorCompartido = 2 AND
-            //             hor.IdGrupoAtencionCompartido = 1 AND
-            //             hor.IdEspecialidad = " . $idespecialidad . "
-            //             )
-            //         )
-            //     ORDER BY hor.FechaInicio
-            // ";
-
-            $resultado = $this->app->dblib->prepare($sql);
-            // $resultado->bindParam(':periodo', $periodo); 
-            // $resultado->bindParam(':idespecialidad', $idespecialidad); 
-
-            $resultado->execute();
-            if ($lista = $resultado->fetchAll()) {
-                $message = "Se encontraron fechas programadas";
-                $flag = 1;
-            }else{
+            $settings = $this->app->get('settings')['sqlsrv'];
+            $conn = sqlsrv_connect($settings['host'], array(
+                'Database' => $settings['dbname'],
+                'Uid' => $settings['user'],
+                'PWD' => $settings['pass']
+            ));
+            if( $conn === false ){
+                throw new Exception(sqlsrv_errors()[0]['message']);
+            }
+            $resultado = sqlsrv_query($conn, $sql);
+            if ($resultado == FALSE){
                 $message = "No tiene fechas programadas";
                 $flag = 0;
+            }else{
+                $message = "Se encontraron fechas programadas"; 
+                $flag = 1;
             }
+            $lista = array();
+            while ($row = sqlsrv_fetch_array($resultado, SQLSRV_FETCH_ASSOC)) {
+                array_push($lista, $row);
+            }
+            sqlsrv_free_stmt($resultado); 
+            // sqlsrv_close($conn);
             // preparar data de fechas programadas
             $arrListaPreparada = array();
-            // $arrFechasTotales = array();
-            // var_dump(date("t-m-Y"),'fechas');
             foreach ($lista as $key => $row) {
-                $desdeAux = date("d-m-Y", strtotime($row['FechaInicio']));
-                $hastaAux = date("d-m-Y", strtotime($row['FechaFin']));
+                // $desdeAux = date("d-m-Y", strtotime($row['FechaInicio']));
+                $desdeAux = $row['FechaInicio']->format('d-m-Y');
+                $hastaAux = $row['FechaFin']->format('d-m-Y');
+                // $hastaAux = date("d-m-Y", strtotime($row['FechaFin']));
                 $arrRangoAux = $this->get_rango_fechas($desdeAux,$hastaAux,true);
                 $lista[$key]['fechas'] = $arrRangoAux;
-                // array_push($arrFechasTotales, array(
-                //     'IdHorario'=> $row['IdHorario'],
-                //     'fechas'=> $arrRangoAux
-                // ));
             }
             foreach ($lista as $key => $row) {
                 foreach ($row['fechas'] as $key => $value) {
@@ -1429,7 +1512,6 @@ class Cita
                     }
                 }
             }
-            // exit();
             // agrupar por semana
             $dataGroupFinal = array_chunk($dataFinal, 7);
             $mesSeleccionado = $this->convertir_mes(date('M',strtotime($desdeFecha)));
@@ -1447,6 +1529,7 @@ class Cita
         } catch (\Exception $th) {
             return $response->withStatus(400)->withJson([
                 'flag' => 0,
+                // 'message' => 'Ocurrió un error al cargar las fechas programadas. Inténtelo nuevamente.'
                 'message' => $th->getMessage()
             ]);
         }
@@ -1473,24 +1556,21 @@ class Cita
             $idusuario = $user->idusuario;
 
             // VALIDACIONES
-                $validator = $this->app->validator->validate($request, [
-                    'fecha'    => V::notBlank(),
-                    'idespecialidad'    => V::notBlank()->digit(),
-                    'idmedico'    => V::notBlank()->digit()
-                ]);
+            $validator = $this->app->validator->validate($request, [
+                'fecha'    => V::notBlank(),
+                'idespecialidad'    => V::notBlank()->digit(),
+                'idmedico'    => V::notBlank()->digit()
+            ]);
 
-                if ( !$validator->isValid() ) {
-                    $errors = $validator->getErrors(); 
-                    return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
-                }
+            if ( !$validator->isValid() ) {
+                $errors = $validator->getErrors(); 
+                return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
+            }
 
             $fecha          = $request->getParam('fecha');
             $idespecialidad = $request->getParam('idespecialidad');
             $idmedico       = $request->getParam('idmedico');
             $idhorario       = $request->getParam('idhorario');
-            /* -- WHERE hor.FechaInicio = '" . date('Y-m-d',strtotime($fecha)). "' */
-            /* WHERE hor.IdHorario = " . $idhorario . " */
-            /* WHERE hor.FechaInicio <= '2019-12-26' AND hor.FechaFin >= '2019-12-26' */
             $sql = "SELECT
                     hor.IdHorario,
                     CAST(hor.HoraInicio AS TIME) AS InicioHorario,
@@ -1516,34 +1596,54 @@ class Cita
                 ORDER BY IdTurno ASC
             ";
 
-            $resultado = $this->app->dblib->prepare($sql);
-            $resultado->execute();
+            $settings = $this->app->get('settings')['sqlsrv'];
+            $conn = sqlsrv_connect($settings['host'], array(
+                'Database' => $settings['dbname'],
+                'Uid' => $settings['user'],
+                'PWD' => $settings['pass']
+            ));
+            if( $conn === false ){
+                throw new Exception(sqlsrv_errors()[0]['message']);
+            }
+            $resultado = sqlsrv_query($conn, $sql);
+            if ($resultado == FALSE){
+                $message = "No se encontraron cupos disponibles en esta fecha rr.";
+                $flag = 0;
+            }else{
+                $message = "Se encontraron turnos programados"; 
+                $flag = 1;
+            }
+            $lista = array();
+            while ($row = sqlsrv_fetch_array($resultado, SQLSRV_FETCH_ASSOC)) {
+                // print_r($row);
+                array_push($lista, $row);
+            }
+
+            // exit();
+            sqlsrv_free_stmt($resultado); 
+            // sqlsrv_close($conn);
+
+            // $resultado = $this->app->dblib->prepare($sql);
+            // $resultado->execute();
             $arrCitas = array();
 
-            if ($lista = $resultado->fetchAll()) {
-                $message = "Se encontraron turnos programados";
-                $flag = 1;
+            if (!empty($lista)) {
+                // $message = "Se encontraron turnos programados";
+                // $flag = 1;
                 // print_r($lista);
                 /* AGREGAR HORARIOS RESTANTES AL ARRAY */
                 $arrListaTotal = array();
                 foreach($lista as $key => $row) {
-                    $desdeAux = date("d-m-Y", strtotime($row['FechaInicio']));
-                    $hastaAux = date("d-m-Y", strtotime($row['FechaFin']));
-                    print_r($desdeAux,$hastaAux);
+                    // $desdeAux = date("d-m-Y", strtotime($row['FechaInicio']));
+                    // $hastaAux = date("d-m-Y", strtotime($row['FechaFin']));
+                    $desdeAux = $row['FechaInicio']->format('d-m-Y');
+                    $hastaAux = $row['FechaFin']->format('d-m-Y');
+                    // print_r($row['FechaInicio']);
+                    // print_r($row['InicioHorario']);
                     $arrRangoAux = $this->get_rango_fechas($desdeAux,$hastaAux,true);
                     $arrDiasValidos = array();
-                    // foreach ($arrRangoAux as $key => $value) {
-                    //     $diaSemana = date("w", strtotime($value));
-                    //     if($value == ){
-
-                    //     }
-                    // }
-
-
-
                     foreach ($arrRangoAux as $key => $value) {
                         $diaSemana = date("w", strtotime($value));
-                        // var_dump($diaSemana, $row['IndicadorLunes'], $row['IndicadorMartes'], $row['IndicadorMiercoles'], $row['IndicadorJueves'], $row['IndicadorViernes'], $row['IndicadorSabado']);
                         if($row['IndicadorLunes'] == 2 && $diaSemana == 1){
                             array_push($arrListaTotal, array(
                                 'IdHorario' => $row['IdHorario'],
@@ -1643,9 +1743,6 @@ class Cita
                     }
                     // var_dump($arrListaTotal); exit();
                 }
-                // var_dump();
-                // var_dump($fecha);
-                // var_dump(date('Y-m-d',strtotime($fecha)));
                 $arrListado = array();
                 foreach ($arrListaTotal as $key => $row) {
                     // var_dump($row['FechaActual']);
@@ -1660,21 +1757,24 @@ class Cita
                         );
                     }
                 }
-                // exit();
-
+                // print_r($arrListaTotal); 
                 foreach ($arrListado as $key => $value) {
+                    $arrAux = array();
                     foreach ($arrListaTotal as $row) {
-                        if( $row['IdHorario'] == $key ){
-                            $arrAux[] = date('Y-m-d H:i',strtotime($row['FechaCita']));
+                        if( $row['IdHorario'] == $key && !empty($row['FechaCita']) ){
+                            // $arrAux[] = date('Y-m-d H:i',strtotime($row['FechaCita']));
+                            $arrAux[] = $row['FechaCita']->format('Y-m-d H:i');
                         }
                     }
-                    $arrListado[$key]['turnos_ocupados'] = $arrAux;
+                    if(!empty($arrAux)){
+                        $arrListado[$key]['turnos_ocupados'] = $arrAux;
+                    }
                 }
-                // print_r($arrListado); 
+                
                 $arrListado = array_values($arrListado);
             }else{
-                $message = "No se encontraron cupos disponibles en esta fecha.";
-                $flag = 0;
+                // $message = "No se encontraron cupos disponibles en esta fecha.";
+                // $flag = 0;
                 return $response->withStatus(400)->withJson([
                     'datos' => $arrCitas,
                     'flag' => $flag,
@@ -1685,14 +1785,15 @@ class Cita
             // print_r($arrListado);
             foreach ($arrListado as $row) {
                 $rowFechaActual = $row['FechaActual'];
-                $hora_inicio = date('H:i',strtotime($row['InicioHorario']));
+                // $hora_inicio = date('H:i',strtotime($row['InicioHorario']));
+                $hora_inicio = $row['InicioHorario']->format('H:i');
+                // $hora_fin = $row['FinHorario']->format('H:i');
                 $i = 1;
-                while ( strtotime($row['FinHorario']) > strtotime($hora_inicio) ) {
+                while ( strtotime($row['FinHorario']->format('Y-m-d H:i:s')) > strtotime($hora_inicio) ) {
                     $hora_fin = date('H:i',(strtotime($hora_inicio) + $row['Intervalo']*60) );
                     $fecha_inicio = date('Y-m-d',strtotime($rowFechaActual)) . ' ' . $hora_inicio;
-                    // if(  ){
-
-                    // }
+                    // print_r($fecha_inicio);
+                    // print_r($row['turnos_ocupados']);
                     if( !in_array($fecha_inicio, $row['turnos_ocupados']) ){
 
                         array_push($arrCitas,
@@ -1724,10 +1825,10 @@ class Cita
                 'flag' => $flag,
                 'message' => $message
             ]);
-
         } catch (\Exception $th) {
             return $response->withStatus(400)->withJson([
                 'flag' => 0,
+                // 'message' => 'Ocurrió un error al cargar los horarios. Inténtelo nuevamente.'
                 'message' => $th->getMessage()
             ]);
         }
@@ -1788,5 +1889,25 @@ class Cita
         if ($mes == 'Dec' || $mes == 'DECEMBER')
         $resultado = 'DICIEMBRE';
         return @$resultado;
+    }
+    private function dbConnection()
+    {
+        $settings = $this->app->get('settings')['sqlsrv'];
+
+
+        // $settings = $c->get('settings')['sqlsrv'];
+        $conn = sqlsrv_connect($settings['host'], array(
+            'Database' => $settings['dbname'],
+            'Uid' => $settings['user'],
+            'PWD' => $settings['pass']
+        ));
+        // return $conn;
+        // $servername = $config['host'];
+        // $connectionInfo = array("Database" => "dashboard_das", "UID" => "test", "PWD" => "test",'ReturnDatesAsStrings'=>true);
+        // $GLOBALS['conn'] = sqlsrv_connect($servername, $connectionInfo);
+        // if (!$GLOBALS['conn']) {
+        //     echo "Error connecting to database.";
+        //     die(print_r(sqlsrv_errors(), true));
+        // }
     }
 }

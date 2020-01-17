@@ -56,10 +56,10 @@ class Cliente
             $resultado->execute();
             $cliente = $resultado->fetchObject();
             // var_dump($cliente->imc, 'fd'); exit();
-            $cliente->imc = $cliente->imc ?? '[ - ]';
-            $cliente->peso = $cliente->peso ?? '[ - ]';
-            $cliente->estatura = (int)$cliente->estatura ?? '[ - ]';
-            $cliente->tipo_sangre = $cliente->tipo_sangre ?? '[ - ]';
+            $cliente->imc = $cliente->imc ?? null;
+            $cliente->peso = $cliente->peso ?? null;
+            $cliente->estatura = (int)$cliente->estatura ?? null;
+            $cliente->tipo_sangre = $cliente->tipo_sangre ?? null;
             return $response->withJson([
                 'datos' => $cliente,
                 'flag' => 1,
@@ -409,7 +409,7 @@ class Cliente
         }
     }
 
-     /**
+    /**
      * Maestro de la tabla PARENTESCO
      * se emplea para el combo de parentesco al egregar o editar un familiar
      *
@@ -525,10 +525,10 @@ class Cliente
             $estatura           = $request->getParam('estatura');
             $imc                = null;
             $tipo_sangre        = $request->getParam('tipo_sangre');
-            if($peso === '[ - ]'){
+            if($peso === '-'){
                 $peso = null;
             }
-            if($tipo_sangre === '[ - ]'){
+            if($tipo_sangre === '-'){
                 $tipo_sangre = null;
             }
             if( !empty($peso) && !empty($request->getParam('estatura')) ){
@@ -764,10 +764,10 @@ class Cliente
                     'habilitado' => true
                 ),
                 array(
-                    'id' => '0',
+                    'id' => null,
                     'paciente' => '----',
                     'habilitado' => false
-                )
+                )/**/
             );
             foreach ($arrFamiliares as $row) {
                 array_push($arrListado,
