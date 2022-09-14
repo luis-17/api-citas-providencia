@@ -165,14 +165,14 @@ class Cita
             $fecha_registro = date('Y-m-d H:i:s');
 
             // VALIDAR QUE NO SE PUEDA REGISTRAR UNA CITA EN UN TURNO OCUPADO(importante) 
-            $fechaCitaParaValidar =date('Y-m-d', strtotime($fecha_cita)) . ' ' . $hora_inicio;
+            $fechaCitaParaValidar =date('Y-m-d', strtotime($fecha_cita)) . 'T' . $hora_inicio.':00';
             $sqlValidMultiple = "SELECT TOP 1 ci.IdCita 
                 FROM SS_CC_Cita ci
                 WHERE ci.IdHorario = ".$idhorario." 
                 AND ci.FechaCita = '".$fechaCitaParaValidar."'
                 AND ci.Estado = 2 
             ";
-            
+            // var_dump($sqlValidMultiple, '$sqlValidMultiple');
 
             $settings = $this->app->get('settings')['sqlsrv'];
             $conn = sqlsrv_connect($settings['host'], array(
@@ -345,6 +345,13 @@ class Cita
             if( !empty($fCliente) ){
                 // $paciente = $res[0];
                 $IdPaciente = $fCliente['IdPaciente'];
+
+                $ms_sql = "UPDATE PersonaMast 
+                    SET Celular = '".$cliente->telefono."',
+                        CorreoElectronico ='".$cliente->correo."'
+                    WHERE IdPaciente = $IdPaciente";
+                $resultado = sqlsrv_query($conn, $ms_sql);
+                // sqlsrv_free_stmt($resultado);
             }else{
                 // Obtener el ultimo registro de PersonaMast
                 $sql = "SELECT max ( PersonaMast.Persona ) id FROM PersonaMast ";
@@ -396,14 +403,14 @@ class Cita
                         '".$cliente->apellido_materno."',
                         '".$cliente->nombres."',
                         '".$nombreCompleto."',
-                        '".date('Y-m-d', strtotime($cliente->fecha_nacimiento))."',
+                        '".date('Y-m-d', strtotime($cliente->fecha_nacimiento))."T00:00:00',
                         '".$cliente->sexo."',
                         'S',
                         'S',
                         'N',
                         'A',
                         '',
-                        '" . date('Y-m-d H:i:s') ."',
+                        '" . date('Y-m-d').'T'.date('H:i:s') ."',
                         1,
                         'D',
                         '".$cliente->numero_documento."',
@@ -412,6 +419,7 @@ class Cita
                         '".$cliente->correo."'
                     );
                 ";
+                // var_dump($sql, 'insert PersonaMast');
                 $resultado = sqlsrv_query($conn, $sql);
                 sqlsrv_free_stmt($resultado);
                 // $resultado = $this->app->dblib->prepare($sql);
@@ -433,22 +441,57 @@ class Cita
                         $IdPaciente,
                         2,
                         'AC',
-                        '" . date('Y-m-d H:i:s') ."',
+                        '" . date('Y-m-d').'T'.date('H:i:s') ."',
                         2,
                         'RCORTEZ',
-                        '" . date('Y-m-d H:i:s') ."',
+                        '" . date('Y-m-d').'T'.date('H:i:s') ."',
                         '',
-                        '" . date('Y-m-d H:i:s') ."'
+                        '" . date('Y-m-d').'T'.date('H:i:s') ."'
                     );
                 ";
                 $resultado = sqlsrv_query($conn, $sql);
                 sqlsrv_free_stmt($resultado);
-                // $resultado = $this->app->dblib->prepare($sql);
-                // $resultado->execute();
+                
+                // ACTUALIZACION DE CORRELATIVO
+                $sql = "SELECT GE_Correlativos.CorrelativoNumero 
+                        FROM GE_Correlativos
+                        WHERE GE_Correlativos.TipoComprobante = 'HC' AND GE_Correlativos.Compania ='00000000' AND GE_Correlativos.Serie ='001'";
+                $resultado = sqlsrv_query($conn, $sql);
+                $fCorrelativo = array();
+                while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
+                    $fCorrelativo = array(
+                        'id' => $row['CorrelativoNumero']
+                    );
+                }
+                sqlsrv_free_stmt($resultado);
+                $IdCorrelativoHC = (int)$fCorrelativo['id'] + 1;
+                $ms_sql = "UPDATE GE_Correlativos 
+                    SET CorrelativoNumero = $IdCorrelativoHC,
+                        UsuarioModificacion ='CITAWEB',
+                        FechaModificacion = GETDATE()
+                    FROM GE_Correlativos 
+                    WHERE TipoComprobante ='HC' 
+                        AND Compania ='00000000' 
+                        AND Serie ='001'";
+                $resultado = sqlsrv_query($conn, $ms_sql);
+                sqlsrv_free_stmt($resultado);
+
+                $ms_sql = "UPDATE SS_GE_Paciente 
+                    SET CodigoHC = $IdCorrelativoHC, 
+                        CodigoHCAnterior = $IdCorrelativoHC, 
+                        TipoAlmacenamiento = 'AC', 
+                        UsuarioModificacion = 'CITAWEB', 
+                        FechaModificacion = GETDATE() 
+                    WHERE IdPaciente = $IdPaciente";
+                $resultado = sqlsrv_query($conn, $ms_sql);
+                sqlsrv_free_stmt($resultado);
             }
 
             // REGISTRO DE CITA EN SQL SERVER
-            $fecha_cita = date('Y-m-d', strtotime($fecha_cita)) . ' ' . $hora_inicio;
+            // $fecha_cita = date('Y-m-d', strtotime($fecha_cita)) . ' ' . $hora_inicio;
+            $soloFechaCita = date('Y-m-d', strtotime($fecha_cita)) . 'T' . '00:00:00';
+            $fecha_cita = date('Y-m-d', strtotime($fecha_cita)) . 'T' . $hora_inicio.':00';
+
             // Registro de SS_CC_Cita
             $sql = "INSERT INTO SS_CC_Cita(
                 IdCita,
@@ -496,21 +539,22 @@ class Cita
                 2,
                 0,
                 2,
-                '',
-                '" . date('Y-m-d H:i:s') ."',
-                '',
-                '" . date('Y-m-d H:i:s') ."',
+                'CITAWEB',
+                '" . date('Y-m-d').'T'.date('H:i:s') ."',
+                'CITAWEB',
+                '" . date('Y-m-d').'T'.date('H:i:s') ."',
                 1,
                 1,
                 1,
                 1,
                 $idmedico,
-                '$fecha_cita',
+                '$soloFechaCita',
                 NULL,
                 NULL,
                 2,
                 NULL);
             ";
+            // var_dump($sql, 'insert');
             $resultado = sqlsrv_query($conn, $sql);
             sqlsrv_free_stmt($resultado);
             // $resultado = $this->app->dblib->prepare($sql);
@@ -521,7 +565,7 @@ class Cita
             VALUES(
                 $IdCita,
                 1,
-                '" . date('Y-m-d H:i:s') ."',
+                '" . date('Y-m-d').'T'.date('H:i:s') ."',
                 NULL,
                 '',
                 2,
@@ -529,10 +573,11 @@ class Cita
                 1,
                 NULL,
                 2,
-                '','" . date('Y-m-d H:i:s') ."',
-                '','" . date('Y-m-d H:i:s') ."'
+                '','" . date('Y-m-d').'T'.date('H:i:s') ."',
+                '','" . date('Y-m-d').'T'.date('H:i:s') ."'
                 )
             ";
+            // var_dump($sql, 'insert');
             $resultado = sqlsrv_query($conn, $sql);
             sqlsrv_free_stmt($resultado);
             // $resultado = $this->app->dblib->prepare($sql);
@@ -734,15 +779,6 @@ class Cita
             $resultado->execute();
             $fCita = $resultado->fetchObject();
 
-            $sql = "UPDATE cita SET
-                estado_cita = 0,
-                fecha_anulacion  = :fechaAnulacion
-                WHERE idcita = $idcita
-            ";
-
-            $resultado = $this->app->db->prepare($sql);
-            $resultado->bindParam(':fechaAnulacion', $fechaAnulacion);
-            $resultado->execute();
             $settings = $this->app->get('settings')['sqlsrv'];
             $conn = sqlsrv_connect($settings['host'], array(
                 'Database' => $settings['dbname'],
@@ -752,6 +788,34 @@ class Cita
             if( $conn === false ){
                 throw new Exception(sqlsrv_errors()[0]['message']);
             }
+
+            $ms_sql = "SELECT IdCita, Estado 
+            FROM SS_CC_Cita WITH ( NOLOCK )
+            WHERE IdCita = $fCita->idcitaspring";
+            $resultado = sqlsrv_query($conn, $ms_sql);
+            $fCitaSpring = array();
+            while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
+                $fCitaSpring = array(
+                    'Estado' => $row['Estado']
+                );
+            }
+            sqlsrv_free_stmt($resultado);
+            if ( !(intval(trim($fCitaSpring['Estado'])) === 2) ) {
+                return $response->withStatus(400)->withJson([
+                    'error' => true, 
+                    'message' => 'La cita ha cambiado de estado. No podrás anularla por este medio.'
+                ]);
+            }
+
+            $sql = "UPDATE cita SET
+                estado_cita = 0,
+                fecha_anulacion  = :fechaAnulacion
+                WHERE idcita = $idcita
+            ";
+
+            $resultado = $this->app->db->prepare($sql);
+            $resultado->bindParam(':fechaAnulacion', $fechaAnulacion);
+            $resultado->execute();
             
             // $arrExistCita = array();
             // while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
@@ -764,9 +828,9 @@ class Cita
                 EstadoDocumentoAnterior = 2,
                 Estado = 1,
                 IdCitaRelacionada = null,
-                UsuarioModificacion = 'BFERREYROS',
+                UsuarioModificacion = 'CITAWEB',
                 MotivoAnulacion = 'CANCELADO POR EL USUARIO(WEB)',
-                FechaModificacion = '" . date('Y-m-d H:i:s') ."'
+                FechaModificacion = '" . date('Y-m-d').'T'.date('H:i:s') ."'
             WHERE SS_CC_Cita.IdCita = $fCita->idcitaspring
             ";
             $resultado = sqlsrv_query($conn, $ms_sql);
@@ -796,18 +860,18 @@ class Cita
             VALUES(
                 $fCita->idcitaspring,
                 $secuencial,
-                '" . date('Y-m-d H:i:s') ."',
+                '" . date('Y-m-d').'T'.date('H:i:s') ."',
                 NULL,
-                'BFERREYROS',
+                'CITAWEB',
                 5,
                 2,
                 1,
                 NULL,
                 2,
-                'BFERREYROS',
-                '" . date('Y-m-d H:i:s') ."',
-                'BFERREYROS',
-                '" . date('Y-m-d H:i:s') ."'
+                'CITAWEB',
+                '" . date('Y-m-d').'T'.date('H:i:s') ."',
+                'CITAWEB',
+                '" . date('Y-m-d').'T'.date('H:i:s') ."'
 
             )";
             $resultado = sqlsrv_query($conn, $ms_sql);
@@ -951,6 +1015,7 @@ class Cita
                 LEFT JOIN EmpleadoMast empl ON hor.Medico = empl.Empleado
                 LEFT JOIN SS_GE_GrupoConsultorio cons ON hor.IdConsultorio = cons.IdConsultorio
                 WHERE hor.Periodo = " . $periodo . "
+                    AND ISNULL(empl.FlagMweb, '1') <> '2' 
                     AND hor.Estado = 2
                     AND empl.Estado = 'A'
                     AND per.Estado = 'A'
@@ -1552,21 +1617,17 @@ class Cita
     {
         try {
             $user = $request->getAttribute('decoded_token_data');
-
             $idusuario = $user->idusuario;
-
             // VALIDACIONES
             $validator = $this->app->validator->validate($request, [
                 'fecha'    => V::notBlank(),
                 'idespecialidad'    => V::notBlank()->digit(),
                 'idmedico'    => V::notBlank()->digit()
             ]);
-
             if ( !$validator->isValid() ) {
                 $errors = $validator->getErrors(); 
                 return $response->withStatus(400)->withJson(['error' => true, 'message' => $errors]);
             }
-
             $fecha          = $request->getParam('fecha');
             $idespecialidad = $request->getParam('idespecialidad');
             $idmedico       = $request->getParam('idmedico');
@@ -1588,7 +1649,7 @@ class Cita
                     IndicadorSabado
                 FROM SS_CC_Horario hor
                 LEFT JOIN SS_CC_Cita ci ON hor.IdHorario = ci.IdHorario AND ci.Estado IN (2)
-                WHERE hor.FechaInicio <= '" . date('Y-m-d',strtotime($fecha)). "' AND hor.FechaFin >= '" . date('Y-m-d',strtotime($fecha)). "'
+                WHERE CAST(hor.FechaInicio AS DATE) <= '" . date('Y-m-d',strtotime($fecha)). "' AND CAST(hor.FechaFin AS DATE) >= '" . date('Y-m-d',strtotime($fecha)). "'
                 AND hor.Medico = " . $idmedico . "
                 AND hor.Estado = 2
                 AND hor.IdEspecialidad = " . $idespecialidad . "
@@ -1596,23 +1657,36 @@ class Cita
                 ORDER BY IdTurno ASC
             ";
 
+            // $settings = $this->app->get('settings')['sqlsrv'];
+            // $conn = sqlsrv_connect($settings['host'], array(
+            //     'Database' => $settings['dbname'],
+            //     'Uid' => $settings['user'],
+            //     'PWD' => $settings['pass']
+            // ));
+            // if( $conn === false ){
+            //     throw new Exception(sqlsrv_errors()[0]['message']);
+            // }
+            // $resultado = sqlsrv_query($conn, $sql);
+
+
+
+
             $settings = $this->app->get('settings')['sqlsrv'];
             $conn = sqlsrv_connect($settings['host'], array(
                 'Database' => $settings['dbname'],
                 'Uid' => $settings['user'],
                 'PWD' => $settings['pass']
             ));
+            // var_dump($sql, 'sql');
             if( $conn === false ){
                 throw new Exception(sqlsrv_errors()[0]['message']);
             }
             $resultado = sqlsrv_query($conn, $sql);
-            if ($resultado == FALSE){
-                $message = "No se encontraron cupos disponibles en esta fecha rr.";
-                $flag = 0;
-            }else{
-                $message = "Se encontraron turnos programados"; 
-                $flag = 1;
+            if ($resultado == FALSE) {
+                throw new Exception("No se encontraron cupos disponibles en esta fecha(1).");
             }
+            $message = "Se encontraron turnos programados";
+            $flag = 1;
             $lista = array();
             while ($row = sqlsrv_fetch_array($resultado, SQLSRV_FETCH_ASSOC)) {
                 // print_r($row);
