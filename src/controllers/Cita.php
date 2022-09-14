@@ -1565,7 +1565,7 @@ class Cita
             // generar fechas validas
             foreach ($dataFinal as $key => $row) {
                 $fechaStr = $row['fecha'];
-                $fechaMasDosDias = date('d-m-Y', strtotime('+2 days'));
+                $fechaMasDosDias = date('d-m-Y', strtotime('+1 day'));
                 $fechaMasDosDiasTS = strtotime($fechaMasDosDias);
                 $fechaStrTS = strtotime($fechaStr);
                 foreach ($arrListaPreparada as $rowLista) {
