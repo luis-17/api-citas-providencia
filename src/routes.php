@@ -36,6 +36,9 @@ $app->group('/api', function(\Slim\App $app) {
 
     $app->get('/ver_plantilla_correo', 'App\Routes\Acceso:verPlantillaHTML');
 
+    $app->group('/cron', function(\Slim\App $app) {
+        $app->post('/envioCorreoPacientesNotifCita', 'App\Routes\CronJobs:envioCorreoPacientesNotifCita');
+    });
 
     $app->group('/platform', function(\Slim\App $app) {
         $app->get('/cargar_perfil_general', 'App\Routes\Cliente:cargar_perfil_general'); // ok

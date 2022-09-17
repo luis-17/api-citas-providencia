@@ -37,6 +37,7 @@ require __DIR__ . '/../src/config.php';
 require __DIR__ . '/../src/upload.php';
 
 require __DIR__ . '/../src/controllers/Acceso.php';
+require __DIR__ . '/../src/controllers/CronJobs.php';
 require __DIR__ . '/../src/controllers/Cliente.php';
 require __DIR__ . '/../src/controllers/Garante.php';
 require __DIR__ . '/../src/controllers/Cita.php';
