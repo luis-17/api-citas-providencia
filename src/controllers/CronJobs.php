@@ -19,15 +19,15 @@ class CronJobs
     public function envioCorreoPacientesNotifCita(Request $request, Response $response, array $args)
     {
       try {
-        // $settings = $this->app->get('settings')['sqlsrv'];
-        // $conn = sqlsrv_connect($settings['host'], array(
-        //   'Database' => $settings['dbname'],
-        //   'Uid' => $settings['user'],
-        //   'PWD' => $settings['pass']
-        // ));
-        // if( $conn === false ){
-        //   throw new Exception(sqlsrv_errors()[0]['message']);
-        // }
+        $settings = $this->app->get('settings')['sqlsrv'];
+        $conn = sqlsrv_connect($settings['host'], array(
+          'Database' => $settings['dbname'],
+          'Uid' => $settings['user'],
+          'PWD' => $settings['pass']
+        ));
+        if( $conn === false ){
+          throw new Exception(sqlsrv_errors()[0]['message']);
+        }
         // obtener fecha de filtro
         $fechaFiltro = date('Ymd',strtotime('+2 day'));
         // var_dump($fechaFiltro);
@@ -78,7 +78,7 @@ class CronJobs
             AND pm.CorreoElectronico <> '' 
             AND dbo.ss_cc_cita.estadodocumento IN (2) -- programado            
         ";
-        // $resultado = sqlsrv_query($conn, $sqlListCitas);
+        $resultado = sqlsrv_query($conn, $sqlListCitas);
         $arrCitas = array(
           array('fecha_cita'=> '19-09-2022', 'hora_cita'=> '18:15:00', 'Especialidad'=> 'TERAPIA FISICA', 'paciente'=> 'CORALES SILVA , VICTOR DENIS', 'CorreoElectronico'=> 'luisls1717@gmail.com', 'medico'=> 'ALEX QUISPE'),
           array('fecha_cita'=> '19-09-2022', 'hora_cita'=> '18:15:00', 'Especialidad'=> 'TERAPIA FISICA', 'paciente'=> 'CORALES SILVA , VICTOR DENIS', 'CorreoElectronico'=> 'stefanyguissela@gmail.com', 'medico'=> 'ALEX QUISPE')
@@ -86,13 +86,13 @@ class CronJobs
         // while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
         //     array_push($arrCitas, $row);
         // }
-        // sqlsrv_free_stmt($resultado);
-        // if ( empty($arrCitas) ) {
-        //   return $response->withStatus(400)->withJson([
-        //       'error' => true, 
-        //       'message' => 'No hay citas para notificar por correo el dia de hoy: '.date('Y-m-d')
-        //   ]);
-        // }
+        sqlsrv_free_stmt($resultado);
+        if ( empty($arrCitas) ) {
+          return $response->withStatus(400)->withJson([
+              'error' => true, 
+              'message' => 'No hay citas para notificar por correo el dia de hoy: '.date('Y-m-d')
+          ]);
+        }
         $fromAlias = 'Clínica Providencia';
         $asunto = 'Recordatorio: Tiene una cita próxima - Clínica Providencia';
 
@@ -142,8 +142,7 @@ class CronJobs
           $mail->MsgHTML($mensaje);
           $mail->CharSet = 'UTF-8';
           $mail->AddAddress($row['CorreoElectronico']);
-          // $boolEnvioCorreo = $mail->Send();
-          // var_dump($fechaFiltro);
+
           $estadoAudit = 'ERR';
           if ($mail->Send()) {
             $estadoAudit = 'ENV';
@@ -173,19 +172,15 @@ class CronJobs
               :fechaRegistro,
               :correoEnvio
           )";
-          // $resultInsAudit = $this->app->db->prepare($sqlAudit);
-          // $resultInsAudit->bindParam(':codigo_auditoria', $arrAuditMail['codigoAuditoria']); // 19-09-2022 18:15:00
-          // $resultInsAudit->bindParam(':paciente', $arrAuditMail['pacienteAudit']);
-          // $resultInsAudit->bindParam(':estado', $arrAuditMail['estadoAudit']);
-          // $resultInsAudit->bindParam(':fechaCita', $arrAuditMail['fechaCitaAudit']);
-          // $resultInsAudit->bindParam(':fechaRegistro', $arrAuditMail['fechaRegAudit']);
-          // $resultInsAudit->bindParam(':correoEnvio', $arrAuditMail['correoElectronico']);
-          // $resultInsAudit->execute();
+          $resultInsAudit = $this->app->db->prepare($sqlAudit);
+          $resultInsAudit->bindParam(':codigo_auditoria', $arrAuditMail['codigoAuditoria']); // 19-09-2022 18:15:00
+          $resultInsAudit->bindParam(':paciente', $arrAuditMail['pacienteAudit']);
+          $resultInsAudit->bindParam(':estado', $arrAuditMail['estadoAudit']);
+          $resultInsAudit->bindParam(':fechaCita', $arrAuditMail['fechaCitaAudit']);
+          $resultInsAudit->bindParam(':fechaRegistro', $arrAuditMail['fechaRegAudit']);
+          $resultInsAudit->bindParam(':correoEnvio', $arrAuditMail['correoElectronico']);
+          $resultInsAudit->execute();
         }
-
-        // $resultado->execute();
-
-        // $arrListado = $resultado->fetchAll();
 
         return $response->withJson([
             'datos' => $arrAuditMail,
