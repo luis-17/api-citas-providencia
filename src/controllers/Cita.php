@@ -321,14 +321,14 @@ class Cita
             $resultado->execute();
             $cliente = $resultado->fetchObject();
             $nombreCompleto = $cliente->apellido_paterno . ' ' . $cliente->apellido_materno . ' , ' . $cliente->nombres;
-
+            $tipoDocSpring = $this->obtenerTipoDocSpring($cliente->tipo_documento);
             // REGISTRO EN SQL SERVER
             // Verificacion si existe cliente
             $sql = "SELECT TOP 1 Persona IdPaciente
                     FROM PersonaMast cli
-                    WHERE ( cli.TipoDocumentoIdentidad ='D'
+                    WHERE ( cli.TipoDocumentoIdentidad ='". $tipoDocSpring ."'
                         AND cli.DocumentoIdentidad = '". $cliente->numero_documento ."' )
-                        OR ( cli.TipoDocumento ='D' AND cli.Documento = '". $cliente->numero_documento ."' )
+                        OR ( cli.TipoDocumento ='". $tipoDocSpring ."' AND cli.Documento = '". $cliente->numero_documento ."' )
             ";
             $resultado = sqlsrv_query($conn, $sql);
             $fCliente = array();
@@ -396,7 +396,7 @@ class Cita
                     ) VALUES (
                         $IdPaciente,
                         '".$nombreCompleto."',
-                        'D',
+                        '".$tipoDocSpring."',
                         '".$cliente->numero_documento."',
                         'LIMA',
                         '".$cliente->apellido_paterno."',
@@ -412,7 +412,7 @@ class Cita
                         '',
                         '" . date('Y-m-d').'T'.date('H:i:s') ."',
                         1,
-                        'D',
+                        '".$tipoDocSpring."',
                         '".$cliente->numero_documento."',
                         'N',
                         '".$cliente->telefono."',
@@ -1983,5 +1983,19 @@ class Cita
         //     echo "Error connecting to database.";
         //     die(print_r(sqlsrv_errors(), true));
         // }
+    }
+
+    private function obtenerTipoDocSpring($tipoDoc) {
+        $tipoDocSpring = NULL;
+        if ($tipoDoc == 'DNI') {
+            $tipoDocSpring = 'D';
+        }
+        if ($tipoDoc == 'CEX') {
+            $tipoDocSpring = 'X';
+        }
+        if ($tipoDoc == 'PAS') {
+            $tipoDocSpring = 'P';
+        }
+        return $tipoDocSpring;
     }
 }

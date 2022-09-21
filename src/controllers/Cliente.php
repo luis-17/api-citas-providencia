@@ -174,7 +174,7 @@ class Cliente
                     'apellido_materno' => V::notBlank()->alnum(),
                     'correo' => V::notBlank()->email(),
                     'tipo_documento' => V::notBlank()->alpha(),
-                    'numero_documento' => V::notBlank()->digit(),
+                    'numero_documento' => V::notBlank()->alpha(),
                     'fecha_nacimiento' => V::date(),
                     'sexo' => V::length(null,1)->regex('/[FM]/'),
                 ]);
@@ -293,7 +293,7 @@ class Cliente
                 'apellido_materno' => V::notBlank()->alnum(),
                 'correo' => V::notBlank()->email(),
                 'tipo_documento' => V::notBlank()->alpha(),
-                'numero_documento' => V::notBlank()->digit(),
+                'numero_documento' => V::notBlank()->alpha(),
                 'fecha_nacimiento' => V::date(),
                 'sexo' => V::length(null,1)->regex('/[FM]/'),
             ]);
@@ -499,7 +499,7 @@ class Cliente
                 // 'apellido_materno' => V::notBlank()->alnum(),
                 'correo' => V::notBlank()->email(),
                 // 'tipo_documento' => V::notBlank()->alpha(),
-                // 'numero_documento' => V::notBlank()->digit(),
+                // 'numero_documento' => V::notBlank()->alpha(),
                 // 'fecha_nacimiento' => V::date(),
                 'telefono' => V::digit(),
                 // 'tipo_sangre' => V::length(null,3),

@@ -141,7 +141,7 @@ class Acceso
             'correo' => V::notBlank()->email(),
             'celular' => V::notBlank()->digit(),
             'tipo_documento' => V::notBlank()->alpha(),
-            'numero_documento' => V::notBlank()->digit(),
+            'numero_documento' => V::notBlank()->alpha(),
             'fecha_nacimiento' => V::date(),
             'sexo' => V::length(null,1)->regex('/[FM]/'),
         ]);

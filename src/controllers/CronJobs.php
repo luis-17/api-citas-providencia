@@ -79,13 +79,13 @@ class CronJobs
             AND dbo.ss_cc_cita.estadodocumento IN (2) -- programado            
         ";
         $resultado = sqlsrv_query($conn, $sqlListCitas);
-        $arrCitas = array(
-          array('fecha_cita'=> '19-09-2022', 'hora_cita'=> '18:15:00', 'Especialidad'=> 'TERAPIA FISICA', 'paciente'=> 'CORALES SILVA , VICTOR DENIS', 'CorreoElectronico'=> 'luisls1717@gmail.com', 'medico'=> 'ALEX QUISPE'),
-          array('fecha_cita'=> '19-09-2022', 'hora_cita'=> '18:15:00', 'Especialidad'=> 'TERAPIA FISICA', 'paciente'=> 'CORALES SILVA , VICTOR DENIS', 'CorreoElectronico'=> 'stefanyguissela@gmail.com', 'medico'=> 'ALEX QUISPE')
-        );
-        // while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
-        //     array_push($arrCitas, $row);
-        // }
+        // $arrCitas = array(
+        //   array('fecha_cita'=> '19-09-2022', 'hora_cita'=> '18:15:00', 'Especialidad'=> 'TERAPIA FISICA', 'paciente'=> 'CORALES SILVA , VICTOR DENIS', 'CorreoElectronico'=> 'luisls1717@gmail.com', 'medico'=> 'ALEX QUISPE'),
+        //   array('fecha_cita'=> '19-09-2022', 'hora_cita'=> '18:15:00', 'Especialidad'=> 'TERAPIA FISICA', 'paciente'=> 'CORALES SILVA , VICTOR DENIS', 'CorreoElectronico'=> 'stefanyguissela@gmail.com', 'medico'=> 'ALEX QUISPE')
+        // );
+        while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
+            array_push($arrCitas, $row);
+        }
         sqlsrv_free_stmt($resultado);
         if ( empty($arrCitas) ) {
           return $response->withStatus(400)->withJson([
@@ -183,8 +183,7 @@ class CronJobs
         }
 
         return $response->withJson([
-            'datos' => $arrAuditMail,
-            // 'count' => count($arrCitas),
+            'count' => count($arrCitas),
             'flag' => 1,
             'message' => "Se ejecutó el lote de correos"
         ]);
