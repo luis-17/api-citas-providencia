@@ -83,6 +83,7 @@ class CronJobs
         //   array('fecha_cita'=> '19-09-2022', 'hora_cita'=> '18:15:00', 'Especialidad'=> 'TERAPIA FISICA', 'paciente'=> 'CORALES SILVA , VICTOR DENIS', 'CorreoElectronico'=> 'luisls1717@gmail.com', 'medico'=> 'ALEX QUISPE'),
         //   array('fecha_cita'=> '19-09-2022', 'hora_cita'=> '18:15:00', 'Especialidad'=> 'TERAPIA FISICA', 'paciente'=> 'CORALES SILVA , VICTOR DENIS', 'CorreoElectronico'=> 'stefanyguissela@gmail.com', 'medico'=> 'ALEX QUISPE')
         // );
+        $arrCitas = array();
         while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
             array_push($arrCitas, $row);
         }
