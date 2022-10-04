@@ -148,6 +148,7 @@ class CronJobs
           if ($mail->Send()) {
             $estadoAudit = 'ENV';
           }
+          $mail->ClearAddresses();
           $arrAuditMail = array(
             'codigoAuditoria'=> 'A001',
             'fechaCitaAudit'=> date('Y-m-d', strtotime($row['fecha_cita'])).' '.$row['hora_cita'],
