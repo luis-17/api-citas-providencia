@@ -87,6 +87,7 @@ class CronJobs
         while( $row = sqlsrv_fetch_array( $resultado, SQLSRV_FETCH_ASSOC) ) {
             array_push($arrCitas, $row);
         }
+        // array_push($arrCitas, array('fecha_cita'=> '19-09-2022', 'hora_cita'=> '18:15:00', 'Especialidad'=> 'TERAPIA FISICA', 'paciente'=> 'LUIS LUNA', 'CorreoElectronico'=> 'luisls1717@gmail.com', 'medico'=> 'ALEX QUISPE'));
         sqlsrv_free_stmt($resultado);
         if ( empty($arrCitas) ) {
           return $response->withStatus(400)->withJson([
