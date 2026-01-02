@@ -253,7 +253,7 @@ class Acceso
             $resultado = $this->app->db->prepare($sql);
             $resultado->bindParam(':username', $username);
             $resultado->bindParam(':password', $password);
-            $resultado->bindParam(':flag_terms', 2);
+            $resultado->bindParam(':flag_terms', $flagTerms);
             $resultado->bindParam(':fecha_flag_terms', $createdAt);
             $resultado->bindParam(':pv', $pv);
             $resultado->bindParam(':ult_ip_address', $ult_ip_address);
