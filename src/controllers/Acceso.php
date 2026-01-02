@@ -17,6 +17,16 @@ class Acceso
     public function login(Request $request, Response $response, array $args)
     {
         $input = $request->getParsedBody();
+        // VALIDAR TÉRMINOS Y CONDICIONES
+        if (
+            !isset($input['aceptaTerminos']) ||
+            filter_var($input['aceptaTerminos'], FILTER_VALIDATE_BOOLEAN) !== true
+        ) {
+            return $response->withStatus(400)->withJson([
+                'flag' => 0,
+                'message' => 'Debe aceptar los términos y condiciones para continuar.'
+            ]);
+        }
         // VALIDACIONES
         $validator = $this->app->validator->validate($request,
             [
@@ -88,7 +98,9 @@ class Acceso
 
         $sql = "UPDATE usuario SET
                     ult_inicio_sesion   = :ult_inicio_sesion,
-                    ult_ip_address      = :ult_ip_address
+                    ult_ip_address      = :ult_ip_address,
+                    flag_terms          = 2,
+                    fecha_flag_terms    = NOW()
                 WHERE idusuario = $user->idusuario
             ";
 
@@ -113,6 +125,7 @@ class Acceso
     public function registro(Request $request, Response $response)
     {
         // $input = $request->getParsedBody();
+        $flagTerms          = $request->getParam('flag_terms');
         $username           = $request->getParam('username');
         $nombres            = $request->getParam('nombres');
         $apellido_paterno   = $request->getParam('apellido_paterno');
@@ -129,6 +142,16 @@ class Acceso
         $ult_ip_address = $request->getAttribute('ip_address');
         $createdAt = date('Y-m-d H:i:s');
         $updatedAt = date('Y-m-d H:i:s');
+
+        if (
+            !isset($flagTerms) ||
+            filter_var($flagTerms, FILTER_VALIDATE_BOOLEAN) !== true
+        ) {
+            return $response->withStatus(400)->withJson([
+                'flag' => 0,
+                'message' => 'Debe aceptar los términos y condiciones para registrarse.'
+            ]);
+        }
 
         // VALIDACIONES
         $validator = $this->app->validator->validate($request, [
@@ -180,6 +203,8 @@ class Acceso
             password,
             ult_ip_address,
             pv,
+            flag_terms,
+            fecha_flag_terms,
             createdAt,
             updatedAt
         ) VALUES (
@@ -187,6 +212,8 @@ class Acceso
             :password,
             :ult_ip_address,
             :pv,
+            :flag_terms,
+            :fecha_flag_terms,
             :createdAt,
             :updatedAt
         )";
@@ -226,6 +253,8 @@ class Acceso
             $resultado = $this->app->db->prepare($sql);
             $resultado->bindParam(':username', $username);
             $resultado->bindParam(':password', $password);
+            $resultado->bindParam(':flag_terms', 2);
+            $resultado->bindParam(':fecha_flag_terms', $createdAt);
             $resultado->bindParam(':pv', $pv);
             $resultado->bindParam(':ult_ip_address', $ult_ip_address);
             $resultado->bindParam(':createdAt', $createdAt);
